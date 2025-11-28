@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.example.cw3ilp.api.dto.ServicePoint;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -392,7 +391,7 @@ public class DroneService {
         logger.info("Calculating delivery path for {} dispatches", dispatches.size());
 
         List<Drone> allDrones = ilpDataService.getAllDrones();
-        List<ServicePoint> servicePoints = ilpDataService.getAllServicePoints();
+        List<DronesAvailability.ServicePoint> servicePoints = ilpDataService.getAllServicePoints();
         List<RestrictedArea> restrictedAreas = ilpDataService.getAllRestrictedAreas();
         List<ServicePointDrones> droneAssociations = ilpDataService.getAllServicePointDrones();
         Map<String, List<Availability>> availabilityMap = ilpDataService.getDroneAvailabilityMap();
@@ -401,7 +400,7 @@ public class DroneService {
                 allDrones.size(), servicePoints.size(), restrictedAreas.size());
 
         Map<String, Drone> droneMap = buildDroneMap(allDrones);
-        Map<Integer, ServicePoint> servicePointMap = buildServicePointMap(servicePoints);
+        Map<Integer, DronesAvailability.ServicePoint> servicePointMap = buildServicePointMap(servicePoints);
 
         List<DronePath> dronePaths = new ArrayList<>();
         int totalMoves = 0;
@@ -442,7 +441,7 @@ public class DroneService {
         logger.info("Calculated delivery path: {} moves, {} cost, {} drone paths",
                 totalMoves, totalCost, dronePaths.size());
 
-        for (ServicePoint sp : servicePoints) {
+        for (DronesAvailability.ServicePoint sp : servicePoints) {
             if (sp.getLocation() != null) {
                 logger.info("  {} (id={}): lng={}, lat={}",
                         sp.getName(), sp.getId(),
@@ -461,17 +460,17 @@ public class DroneService {
      */
     private static class PlannedRoute {
         private Drone drone;
-        private ServicePoint servicePoint;
+        private DronesAvailability.ServicePoint servicePoint;
         private List<MedDispatchRec> dispatches;
 
-        public PlannedRoute(Drone drone, ServicePoint servicePoint) {
+        public PlannedRoute(Drone drone, DronesAvailability.ServicePoint servicePoint) {
             this.drone = drone;
             this.servicePoint = servicePoint;
             this.dispatches = new ArrayList<>();
         }
 
         public Drone getDrone() { return drone; }
-        public ServicePoint getServicePoint() { return servicePoint; }
+        public DronesAvailability.ServicePoint getServicePoint() { return servicePoint; }
         public List<MedDispatchRec> getDispatches() { return dispatches; }
 
         public void addDispatch(MedDispatchRec dispatch) {
@@ -488,9 +487,9 @@ public class DroneService {
         return map;
     }
 
-    private Map<Integer, ServicePoint> buildServicePointMap(List<ServicePoint> servicePoints) {
-        Map<Integer, ServicePoint> map = new HashMap<>();
-        for (ServicePoint sp : servicePoints) {
+    private Map<Integer, DronesAvailability.ServicePoint> buildServicePointMap(List<DronesAvailability.ServicePoint> servicePoints) {
+        Map<Integer, DronesAvailability.ServicePoint> map = new HashMap<>();
+        for (DronesAvailability.ServicePoint sp : servicePoints) {
             map.put(sp.getId(), sp);
         }
         return map;
@@ -503,7 +502,7 @@ public class DroneService {
      */
     private List<PlannedRoute> planRoutes(
             List<MedDispatchRec> dispatches,
-            List<ServicePoint> servicePoints,
+            List<DronesAvailability.ServicePoint> servicePoints,
             List<ServicePointDrones> droneAssociations,
             Map<String, Drone> droneMap,
             Map<String, List<Availability>> availabilityMap,
@@ -517,7 +516,7 @@ public class DroneService {
         while (!unassigned.isEmpty()) {
             MedDispatchRec dispatch = unassigned.get(0);
 
-            ServicePoint closestSP = findClosestServicePoint(dispatch.getDelivery(), servicePoints);
+            DronesAvailability.ServicePoint closestSP = findClosestServicePoint(dispatch.getDelivery(), servicePoints);
 
             if (closestSP == null) {
                 logger.warn("No service point found for dispatch {}", dispatch.getId());
@@ -573,7 +572,7 @@ public class DroneService {
                     while (iterator.hasNext()) {
                         MedDispatchRec otherDispatch = iterator.next();
 
-                        ServicePoint otherClosestSP = findClosestServicePoint(
+                        DronesAvailability.ServicePoint otherClosestSP = findClosestServicePoint(
                                 otherDispatch.getDelivery(), servicePoints);
 
                         if (otherClosestSP == null || !otherClosestSP.getId().equals(closestSP.getId())) {
@@ -612,7 +611,7 @@ public class DroneService {
                 logger.warn("No available drone at {} for dispatch {}, trying other service points...",
                         closestSP.getName(), dispatch.getId());
 
-                for (ServicePoint sp : servicePoints) {
+                for (DronesAvailability.ServicePoint sp : servicePoints) {
                     if (sp.getId().equals(closestSP.getId())) continue;
 
                     ServicePointDrones otherSpDrones = findDroneAssociationForServicePoint(
@@ -666,18 +665,18 @@ public class DroneService {
     /**
      * Find the closest service point to a delivery location
      */
-    private ServicePoint findClosestServicePoint(LngLatAlt deliveryLocation, List<ServicePoint> servicePoints) {
+    private DronesAvailability.ServicePoint findClosestServicePoint(LngLatAlt deliveryLocation, List<DronesAvailability.ServicePoint> servicePoints) {
         if (deliveryLocation == null || servicePoints == null || servicePoints.isEmpty()) {
             return null;
         }
 
-        ServicePoint closest = null;
+        DronesAvailability.ServicePoint closest = null;
         double minDistance = Double.MAX_VALUE;
 
         logger.info("Finding closest service point for delivery at ({}, {})",
                 deliveryLocation.getLng(), deliveryLocation.getLat());
 
-        for (ServicePoint sp : servicePoints) {
+        for (DronesAvailability.ServicePoint sp : servicePoints) {
             if (sp.getLocation() == null) {
                 logger.warn("  Service point {} has null location!", sp.getName());
                 continue;
@@ -788,10 +787,10 @@ public class DroneService {
      */
     private DronePath generateDronePath(
             PlannedRoute route,
-            Map<Integer, ServicePoint> servicePointMap,
+            Map<Integer, DronesAvailability.ServicePoint> servicePointMap,
             List<RestrictedArea> restrictedAreas
     ) {
-        ServicePoint sp = route.getServicePoint();
+        DronesAvailability.ServicePoint sp = route.getServicePoint();
         List<MedDispatchRec> dispatches = route.getDispatches();
 
         if (dispatches.isEmpty()) {
@@ -1075,12 +1074,12 @@ public class DroneService {
         logger.info("Calculating single-drone delivery path as GeoJSON for {} dispatches", dispatches.size());
 
         List<Drone> allDrones = ilpDataService.getAllDrones();
-        List<ServicePoint> servicePoints = ilpDataService.getAllServicePoints();
+        List<DronesAvailability.ServicePoint> servicePoints = ilpDataService.getAllServicePoints();
         List<RestrictedArea> restrictedAreas = ilpDataService.getAllRestrictedAreas();
         List<ServicePointDrones> droneAssociations = ilpDataService.getAllServicePointDrones();
         Map<String, List<Availability>> availabilityMap = ilpDataService.getDroneAvailabilityMap();
 
-        ServicePoint bestServicePoint = findBestServicePointForDeliveries(dispatches, servicePoints);
+        DronesAvailability.ServicePoint bestServicePoint = findBestServicePointForDeliveries(dispatches, servicePoints);
 
         if (bestServicePoint == null) {
             logger.warn("No suitable service point found");
@@ -1145,18 +1144,18 @@ public class DroneService {
     /**
      * Find the best service point based on average distance to all deliveries
      */
-    private ServicePoint findBestServicePointForDeliveries(
+    private DronesAvailability.ServicePoint findBestServicePointForDeliveries(
             List<MedDispatchRec> dispatches,
-            List<ServicePoint> servicePoints
+            List<DronesAvailability.ServicePoint> servicePoints
     ) {
         if (servicePoints == null || servicePoints.isEmpty()) {
             return null;
         }
 
-        ServicePoint best = null;
+        DronesAvailability.ServicePoint best = null;
         double bestTotalDistance = Double.MAX_VALUE;
 
-        for (ServicePoint sp : servicePoints) {
+        for (DronesAvailability.ServicePoint sp : servicePoints) {
             if (sp.getLocation() == null) continue;
 
             double totalDistance = 0;
@@ -1183,7 +1182,7 @@ public class DroneService {
      */
     private Drone findDroneForAllDispatches(
             List<MedDispatchRec> dispatches,
-            ServicePoint servicePoint,
+            DronesAvailability.ServicePoint servicePoint,
             List<ServicePointDrones> droneAssociations,
             List<Drone> allDrones,
             Map<String, List<Availability>> availabilityMap
@@ -1231,7 +1230,7 @@ public class DroneService {
      * Log drone selection details
      */
     // logging for debugging
-    private void logDroneSelection(Drone drone, ServicePoint servicePoint, int estimatedMoves, int numDispatches) {
+    private void logDroneSelection(Drone drone, DronesAvailability.ServicePoint servicePoint, int estimatedMoves, int numDispatches) {
         Capability cap = drone.getCapability();
         int maxMoves = cap.getMaxMoves();
         double maxCost = (cap.getCostInitial() + (maxMoves * cap.getCostPerMove()) + cap.getCostFinal()) / (double) numDispatches;

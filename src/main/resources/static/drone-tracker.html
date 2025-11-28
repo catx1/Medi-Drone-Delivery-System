@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Drone Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div style="position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); max-width: 250px;">
+    <h3 style="margin-top: 0; margin-bottom: 15px;">Drone Flight Control</h3>
+
+    <button id="enableMapClick"
+            style="width: 100%; padding: 10px; margin: 5px 0; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Set Delivery Location
+    </button>
+
+    <button onclick="stopFlight()"
+            style="width: 100%; padding: 10px; margin: 5px 0; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+        Stop Flight
+    </button>
+
+    <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+        <p style="margin: 5px 0; font-size: 13px;"><strong>Drone ID:</strong> <span id="droneId">-</span></p>
+        <p style="margin: 5px 0; font-size: 13px;"><strong>Status:</strong> <span id="status">Ready</span></p>
+        <p style="margin: 5px 0; font-size: 13px;"><strong>Position:</strong> <span id="position">-</span></p>
+
+        <div style="margin-top: 10px;">
+            <p style="margin: 5px 0; font-size: 13px;"><strong>Progress:</strong> <span id="progressText">0%</span></p>
+            <div style="width: 100%; background: #e9ecef; border-radius: 4px; height: 20px; overflow: hidden; margin-top: 5px;">
+                <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #28a745, #20c997); transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let stompClient = null;
+    let droneMarker = null;
+    let deliveryMarker = null;
+    let servicePointMarker = null;
+    let startMarker = null;
+    let flightPathLine = null;
+    let isMapClickEnabled = false;
+
+    // Initialize map
+    const map = L.map('map').setView([55.9445, -3.1892], 15);
+    L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.{ext}', {
+        minZoom: 0,
+        maxZoom: 20,
+        attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        ext: 'png'
+    }).addTo(map);
+
+
+    // Drone marker (initially hidden)
+    droneMarker = L.marker([55.9445, -3.1892], {
+        icon: L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41]
+        })
+    });
+
+    // Enable map click to set destination
+    document.getElementById('enableMapClick').addEventListener('click', function() {
+        isMapClickEnabled = true;
+        this.disabled = true;
+        this.textContent = 'Click map to set delivery location...';
+        this.style.backgroundColor = '#ffa500';
+
+        // Clear previous markers if exist
+        if (deliveryMarker) {
+            map.removeLayer(deliveryMarker);
+        }
+        if (servicePointMarker) {
+            map.removeLayer(servicePointMarker);
+        }
+        if (flightPathLine) {
+            map.removeLayer(flightPathLine);
+        }
+    });
+
+    // Handle map clicks
+    map.on('click', function(e) {
+        if (!isMapClickEnabled) return;
+
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+
+        // Clear all existing markers and paths
+        if (deliveryMarker) {
+            map.removeLayer(deliveryMarker);
+        }
+        if (servicePointMarker) {
+            map.removeLayer(servicePointMarker);
+        }
+        if (startMarker) {
+            map.removeLayer(startMarker);
+        }
+        if (flightPathLine) {
+            map.removeLayer(flightPathLine);
+        }
+        if (droneMarker) {
+            map.removeLayer(droneMarker);
+        }
+
+        // Place delivery marker
+        deliveryMarker = L.marker([lat, lng], {
+            icon: L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41]
+            })
+        }).addTo(map).bindPopup("Delivery Target");
+
+        // Calculate and start flight
+        calculateAndStartFlight(lng, lat);
+
+        isMapClickEnabled = false;
+        document.getElementById('enableMapClick').disabled = false;
+        document.getElementById('enableMapClick').textContent = 'Set New Delivery Location';
+        document.getElementById('enableMapClick').style.backgroundColor = '#007bff';
+    });
+
+    function calculateAndStartFlight(lng, lat) {
+        document.getElementById('status').textContent = 'Calculating path...';
+
+        // Reset progress bar
+        document.getElementById('progressBar').style.width = '0%';
+        document.getElementById('progressText').textContent = '0%';
+        document.getElementById('progressBar').textContent = '';
+
+        fetch(`http://localhost:8080/api/v1/drone/calculate-and-track?targetLng=${lng}&targetLat=${lat}`, {
+            method: 'POST'
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                // Add start/service point marker (green - this is where the drone starts)
+                if (startMarker) {
+                    map.removeLayer(startMarker);
+                }
+                if (servicePointMarker) {
+                    map.removeLayer(servicePointMarker);
+                }
+
+                // The service point IS the start location - use green marker
+                startMarker = L.marker([data.servicePoint.lat, data.servicePoint.lng], {
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41]
+                    })
+                }).addTo(map).bindPopup(`${data.servicePoint.name} (Start/End) - Distance to target: ${data.servicePoint.distance.toFixed(4)}°`);
+
+                // Position drone marker at the actual start of the flight path
+                if (data.flightPath && data.flightPath.length > 0) {
+                    const startPos = data.flightPath[0]; // Get first waypoint
+                    droneMarker.setLatLng([startPos.lat, startPos.lng]);
+                    droneMarker.addTo(map);
+                    console.log('Drone positioned at start:', startPos.lat, startPos.lng);
+                }
+
+                // Draw flight path
+                if (flightPathLine) {
+                    map.removeLayer(flightPathLine);
+                }
+
+                const pathCoords = data.flightPath.map(p => [p.lat, p.lng]);
+                flightPathLine = L.polyline(pathCoords, {
+                    color: 'blue',
+                    weight: 3,
+                    opacity: 0.6,
+                    dashArray: '10, 5'
+                }).addTo(map);
+
+                // Fit map bounds to show entire flight path
+                map.fitBounds(flightPathLine.getBounds());
+
+                document.getElementById('status').textContent =
+                    `Flight planned via ${data.servicePoint.name}: ${data.totalWaypoints} waypoints. Flight starting...`;
+                document.getElementById('droneId').textContent = data.droneId;
+            })
+            .catch(error => {
+                alert('Failed to calculate path: ' + error);
+                document.getElementById('status').textContent = 'Error calculating path';
+            });
+    }
+
+    // WebSocket connection
+    function connect() {
+        const socket = new SockJS('http://localhost:8080/ws');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function(frame) {
+            console.log('Connected: ' + frame);
+            document.getElementById('status').textContent = 'WebSocket connected - Ready';
+
+            stompClient.subscribe('/topic/drone/position', function(message) {
+                const position = JSON.parse(message.body);
+                updateDronePosition(position);
+            });
+        }, function(error) {
+            console.error('WebSocket connection error:', error);
+            document.getElementById('status').textContent = 'Connection failed - Retrying...';
+            // Retry connection after 3 seconds
+            setTimeout(connect, 3000);
+        });
+    }
+
+    function updateDronePosition(position) {
+        if (!map.hasLayer(droneMarker)) {
+            droneMarker.addTo(map);
+        }
+
+        droneMarker.setLatLng([position.lat, position.lng]);
+
+        document.getElementById('droneId').textContent = position.droneId;
+        document.getElementById('status').textContent = position.status;
+        document.getElementById('position').textContent =
+            `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`;
+
+        // Update progress bar
+        if (position.percentComplete !== undefined && position.percentComplete !== null) {
+            const progress = Math.min(100, Math.max(0, position.percentComplete));
+            document.getElementById('progressBar').style.width = progress + '%';
+            document.getElementById('progressText').textContent = progress.toFixed(1) + '%';
+
+            // Show percentage in the bar if there's enough space
+            if (progress > 15) {
+                document.getElementById('progressBar').textContent = progress.toFixed(0) + '%';
+            } else {
+                document.getElementById('progressBar').textContent = '';
+            }
+        }
+
+        // Pan map to follow drone
+        map.panTo([position.lat, position.lng]);
+    }
+
+
+    function stopFlight() {
+        fetch('http://localhost:8080/api/v1/drone/stop', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('status').textContent = 'Flight stopped';
+                console.log('Stop response:', data);
+
+                // Keep current progress visible (don't reset to 0)
+            })
+            .catch(error => {
+                console.error('Error stopping flight:', error);
+                document.getElementById('status').textContent = 'Error stopping flight';
+            });
+    }
+
+    // Auto-connect to WebSocket on page load
+    connect();
+</script>
+</body>
+</html>

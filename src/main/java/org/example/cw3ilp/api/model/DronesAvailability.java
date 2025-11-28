@@ -7,4 +7,11 @@ import java.util.List;
 public class DronesAvailability {
     private String id;
     private List<Availability> availability;
+
+    @Data
+    public static class ServicePoint {
+        private String name;
+        private LngLatAlt location;
+        private Integer id;
+    }
 }

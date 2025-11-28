@@ -1,7 +1,6 @@
-package org.example.cw3ilp.api.dto;
+package org.example.cw3ilp.api.model;
 
 import lombok.Data;
-import org.example.cw3ilp.api.model.LngLatAlt;
 
 import java.util.List;
 

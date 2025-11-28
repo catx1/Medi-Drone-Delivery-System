@@ -1,6 +1,5 @@
 package org.example.cw3ilp.service;
 
-import org.example.cw3ilp.api.dto.ServicePoint;
 import org.example.cw3ilp.api.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,12 +54,12 @@ public class ILPDataService {
     /**
      * Fetch all service points from ILP service
      */
-    public List<ServicePoint> getAllServicePoints() {
+    public List<DronesAvailability.ServicePoint> getAllServicePoints() {
         try {
             String url = ilpEndpoint + "/service-points";
             logger.info("Fetching service points from: {}", url);
 
-            ServicePoint[] servicePoints = restTemplate.getForObject(url, ServicePoint[].class);
+            DronesAvailability.ServicePoint[] servicePoints = restTemplate.getForObject(url, DronesAvailability.ServicePoint[].class);
 
             if (servicePoints != null) {
                 logger.info("Successfully fetched {} service points", servicePoints.length);

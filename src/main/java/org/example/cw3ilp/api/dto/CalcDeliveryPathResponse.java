@@ -1,6 +1,7 @@
 package org.example.cw3ilp.api.dto;
 
 import lombok.Data;
+import org.example.cw3ilp.api.model.DronePath;
 
 import java.util.List;
 
