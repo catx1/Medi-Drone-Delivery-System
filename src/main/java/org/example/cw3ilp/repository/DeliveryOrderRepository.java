@@ -1,4 +1,4 @@
-package org.example.cw3ilp.api.repository;
+package org.example.cw3ilp.repository;
 
 import org.example.cw3ilp.entity.DeliveryOrder;
 import org.example.cw3ilp.entity.OrderStatus;
@@ -10,5 +10,4 @@ import java.util.Optional;
 public interface DeliveryOrderRepository extends JpaRepository<DeliveryOrder, Long> {
     Optional<DeliveryOrder> findByOrderNumber(String orderNumber);
     List<DeliveryOrder> findByStatusOrderByCreatedAtAsc(OrderStatus status);
-    Optional<DeliveryOrder> findByPickupCode(String pickupCode);
 }

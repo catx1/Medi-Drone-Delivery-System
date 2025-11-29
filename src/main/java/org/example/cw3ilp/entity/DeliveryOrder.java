@@ -35,8 +35,6 @@ public class DeliveryOrder {
     @Column(nullable = false)
     private Integer quantity = 1;
 
-    @Column(name = "pickup_code", nullable = false, length = 6)
-    private String pickupCode;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)

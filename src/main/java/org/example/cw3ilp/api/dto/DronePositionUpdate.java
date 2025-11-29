@@ -15,4 +15,6 @@ public class DronePositionUpdate {
     private Integer deliveryId;
     private Double percentComplete;
     private Long timestamp;
+    private String orderNumber;
+
 }

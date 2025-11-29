@@ -5,11 +5,7 @@ import org.example.cw3ilp.api.dto.CalcDeliveryPathResponse;
 import org.example.cw3ilp.api.dto.MedDispatchRec;
 import org.example.cw3ilp.api.dto.QueryCriteriaRequest;
 import org.example.cw3ilp.api.model.*;
-import org.example.cw3ilp.service.DistanceService;
-import org.example.cw3ilp.service.DroneFlightSimulator;
-import org.example.cw3ilp.service.DroneService;
-import org.example.cw3ilp.service.ILPDataService;
-import org.example.cw3ilp.service.PathfinderService;
+import org.example.cw3ilp.service.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -27,17 +23,20 @@ public class DroneController {
     private final PathfinderService pathfinderService;
     private final ILPDataService ilpDataService;
     private final DistanceService distanceService;
+    private final GeocodingService geocodingService;
 
     public DroneController(DroneService droneService,
                            DroneFlightSimulator droneFlightSimulator,
                            PathfinderService pathfinderService,
                            ILPDataService ilpDataService,
-                           DistanceService distanceService) {
+                           DistanceService distanceService,
+                           GeocodingService geocodingService) {
         this.droneService = droneService;
         this.droneFlightSimulator = droneFlightSimulator;
         this.pathfinderService = pathfinderService;
         this.ilpDataService = ilpDataService;
         this.distanceService = distanceService;
+        this.geocodingService = geocodingService;
     }
 
 
@@ -356,6 +355,170 @@ public class DroneController {
         }
     }
 
+    @GetMapping("/test-geocoding")
+    public ResponseEntity<Map<String, Object>> testGeocoding(
+            @RequestParam(defaultValue = "Appleton Tower") String address) {
 
+        try {
+            Map<String, Double> coords = geocodingService.geocodeAddress(address);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "address", address,
+                    "coordinates", coords,
+                    "message", "Geocoding successful!"
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            "success", false,
+                            "error", e.getMessage()
+                    ));
+        }
+    }
+
+    /**
+     * Calculate delivery path with medication requirements - for customer portal
+     */
+    @PostMapping("/drone/calculate-delivery")
+    public ResponseEntity<Map<String, Object>> calculateDeliveryPath(
+            @RequestParam Long medicationId,
+            @RequestParam double targetLat,
+            @RequestParam double targetLng) {
+
+        try {
+            logger.info("Calculating delivery path for medication {} to ({}, {})",
+                    medicationId, targetLat, targetLng);
+
+            // Get medication details
+            boolean requiresRefrigeration = checkMedicationRequiresRefrigeration(medicationId);
+            logger.info("Medication requires refrigeration: {}", requiresRefrigeration);
+
+            // Get all service points
+            List<DronesAvailability.ServicePoint> servicePoints = ilpDataService.getAllServicePoints();
+
+            // Find nearest service point
+            DronesAvailability.ServicePoint nearestServicePoint = findNearestServicePoint(servicePoints, targetLat, targetLng);
+
+            if (nearestServicePoint == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "error", "No service points available"));
+            }
+
+            double startLat = nearestServicePoint.getLocation().getLat();
+            double startLng = nearestServicePoint.getLocation().getLng();
+
+            LngLat targetLocation = new LngLat(targetLng, targetLat);
+            double distance = distanceService.computeDistance(
+                    new LngLat(startLng, startLat),
+                    targetLocation);
+
+            logger.info("Nearest service point: {} at distance: {}",
+                    nearestServicePoint.getName(), distance);
+
+            // Get restricted areas
+            List<RestrictedArea> restrictedAreas = ilpDataService.getAllRestrictedAreas();
+
+            // Calculate path - ONLY to target (one-way delivery)
+            LngLatAlt servicePointPos = new LngLatAlt(startLng, startLat, 50.0);
+            LngLatAlt targetPos = new LngLatAlt(targetLng, targetLat, 50.0);
+
+            List<LngLatAlt> pathToTarget = pathfinderService.findPath(servicePointPos, targetPos, restrictedAreas);
+
+            if (pathToTarget == null) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "error", "Could not find valid path"));
+            }
+
+            // Add hover at delivery location (3 waypoints for ~3 seconds landing/delivery)
+            pathToTarget.add(targetPos);
+            pathToTarget.add(targetPos);
+            pathToTarget.add(targetPos);
+
+            // Calculate distance and ETA (one-way only)
+            double totalDistance = calculatePathDistanceAlt(pathToTarget);
+            double speedKmPerSec = 0.015; // 15 m/s
+            int etaSeconds = (int) (totalDistance / speedKmPerSec);
+
+            logger.info("Delivery path calculated: {} waypoints, ETA: {} seconds",
+                    pathToTarget.size(), etaSeconds);
+
+            // Assign drone
+            String assignedDrone = assignSuitableDrone(requiresRefrigeration);
+
+            // Convert to map format
+            List<Map<String, Double>> pathCoordinates = pathToTarget.stream()
+                    .map(pos -> Map.of("lat", pos.getLat(), "lng", pos.getLng()))
+                    .toList();
+
+            // Round to 2 decimal places for display
+            double distanceKm = Math.round(totalDistance * 100.0) / 100.0;
+            int etaMinutes = (int) Math.ceil(etaSeconds / 60.0);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "servicePoint", Map.of(
+                            "name", nearestServicePoint.getName(),
+                            "lat", startLat,
+                            "lng", startLng
+                    ),
+                    "assignedDrone", assignedDrone,
+                    "requiresRefrigeration", requiresRefrigeration,
+                    "path", pathCoordinates,
+                    "totalWaypoints", pathToTarget.size(),
+                    "etaSeconds", etaSeconds,
+                    "etaMinutes", etaMinutes,
+                    "distanceKm", distanceKm
+            ));
+
+        } catch (Exception e) {
+            logger.error("Failed to calculate delivery path", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    private DronesAvailability.ServicePoint findNearestServicePoint(
+            List<DronesAvailability.ServicePoint> servicePoints,
+            double targetLat, double targetLng) {
+
+        LngLat target = new LngLat(targetLng, targetLat);
+
+        return servicePoints.stream()
+                .filter(sp -> sp.getLocation() != null)
+                .min(Comparator.comparingDouble(sp ->
+                        distanceService.computeDistance(
+                                new LngLat(sp.getLocation().getLng(), sp.getLocation().getLat()),
+                                target)))
+                .orElse(null);
+    }
+
+    private double calculatePathDistanceAlt(List<LngLatAlt> path) {
+        double totalDistance = 0;
+        for (int i = 0; i < path.size() - 1; i++) {
+            LngLatAlt current = path.get(i);
+            LngLatAlt next = path.get(i + 1);
+            totalDistance += distanceService.computeDistance(
+                    new LngLat(current.getLng(), current.getLat()),
+                    new LngLat(next.getLng(), next.getLat()));
+        }
+        return totalDistance;
+    }
+
+    private String assignSuitableDrone(boolean requiresRefrigeration) {
+        // Simple assignment logic - in real app, check availability
+        if (requiresRefrigeration) {
+            return "DRONE-COOL-001"; // Drone with refrigeration
+        } else {
+            return "DRONE-STD-001"; // Standard drone
+        }
+    }
+
+    private boolean checkMedicationRequiresRefrigeration(Long medicationId) {
+        // TODO: Implement actual database lookup
+        // For now, assume medication IDs 1-3 need refrigeration
+        return medicationId <= 3;
+    }
 
 }

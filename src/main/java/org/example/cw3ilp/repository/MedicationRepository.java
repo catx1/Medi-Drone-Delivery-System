@@ -1,4 +1,4 @@
-package org.example.cw3ilp.api.repository;
+package org.example.cw3ilp.repository;
 
 import org.example.cw3ilp.entity.Medication;
 import org.springframework.data.jpa.repository.JpaRepository;

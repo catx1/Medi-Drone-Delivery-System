@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediDrone - Medication Delivery</title>
+
+    <!-- External Libraries CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.css" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/css/customer-portal.css">
+
+    <!-- External Libraries JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <h1>MediDrone</h1>
+        <p>Fast, Reliable Medication Delivery by Drone</p>
+    </div>
+
+    <div class="main-content">
+        <!-- Left Panel: Order Form -->
+        <div class="card">
+            <h2 class="section-title">Place Your Order</h2>
+
+            <!-- Order Form (visible by default) -->
+            <div id="orderFormSection">
+                <!-- Step 1: Enter Address -->
+                <div id="step1" class="step">
+                    <div class="step-indicator">
+                        Step 1: Enter Your Address
+                    </div>
+
+                    <div class="form-group">
+                        <label for="address">Delivery Postcode</label>
+                        <input type="text" id="address"
+                               placeholder="e.g. EH8 9AB"
+                               autocomplete="off"
+                               style="text-transform: uppercase;"
+                               maxlength="8"
+                               pattern="^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$">
+                        <small id="postcodeError" style="color: #f44336; display: none; margin-top: 5px;">
+                            Please enter a valid UK postcode (e.g. EH8 9AB)
+                        </small>
+
+                        <p class="info-text">
+                            Enter a UK postcode to find addresses
+                        </p>
+                    </div>
+
+                    <!-- Confirm button (hidden until address is found) -->
+                    <button class="btn hidden" id="confirmLocationBtn" onclick="confirmLocation()"
+                            style="margin-top: 10px; background: #4CAF50;">
+                        Confirm Pickup Location
+                    </button>
+
+                    <button class="btn hidden" id="changeAddressBtn" onclick="changeAddress()"
+                            style="margin-top: 10px; background: #6c757d;">
+                        Change Address
+                    </button>
+                </div>
+
+                <!-- Step 2: Select Medication (hidden initially) -->
+                <div id="step2" class="step hidden">
+                    <div class="step-indicator">
+                        Step 2: Select Medication
+                    </div>
+
+                    <div class="form-group">
+                        <label for="medication">Medication</label>
+                        <select id="medication">
+                            <option value="">Loading medications...</option>
+                        </select>
+                    </div>
+
+                    <!-- Delivery Preview (shown after medication selection) -->
+                    <div id="deliveryPreview" style="display: none;"></div>
+
+                    <div class="form-group">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" id="quantity" value="1" min="1" max="10">
+                    </div>
+
+                    <button class="btn" onclick="placeOrder()">Place Order</button>
+                    <button class="btn" onclick="backToStep1()"
+                            style="margin-top: 10px; background: #6c757d;">
+                        Change Location
+                    </button>
+                </div>
+            </div>
+
+            <!-- Order Status (hidden initially) -->
+            <div id="orderStatusSection" class="hidden">
+                <div class="status-badge" id="statusBadge">QUEUED</div>
+
+                <div style="margin-bottom: 15px;">
+                    <strong>Order Number:</strong>
+                    <div id="orderNumber" style="font-size: 1.2em; margin: 5px 0; color: #667eea;"></div>
+                </div>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressBar"></div>
+                </div>
+
+                <div id="statusMessage" style="margin: 15px 0; color: #666; text-align: center;"></div>
+
+                <!-- Confirm Pickup Section (shown when arrived) -->
+                <div id="confirmPickupSection" class="hidden">
+                    <button class="btn" onclick="confirmPickup()"
+                            style="width: 100%; padding: 15px; font-size: 1.1em; background: #4CAF50;">
+                        ✓ Order Collected
+                    </button>
+                    <small style="display: block; text-align: center; margin-top: 10px; color: #666;">
+                        Click this button after you've collected your medication
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Map -->
+        <div class="card">
+            <h2 class="section-title">Delivery Location</h2>
+            <div class="map-container">
+                <div id="map"></div>
+
+                <!-- Fixed center marker (hidden initially) -->
+                <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png"
+                     class="center-marker hidden"
+                     id="centerMarker"
+                     width="25"
+                     height="41"
+                     alt="Pickup location">
+
+                <!-- Address Display -->
+                <div class="address-display" id="addressDisplay">
+                    Enter your address to get started
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Custom JavaScript -->
+<script src="/js/customer-portal.js"></script>
+</body>
+</html>
+

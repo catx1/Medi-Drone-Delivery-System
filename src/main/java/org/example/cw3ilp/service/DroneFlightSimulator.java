@@ -16,8 +16,10 @@ public class DroneFlightSimulator {
     private List<LngLatAlt> flightPath;
     private int currentPathIndex = 0;
     private String droneId;
-    private String status = "WAITING"; // WAITING, FLYING, HOVERING, DELIVERED
+    private String status = "WAITING"; // WAITING, FLYING, HOVERING, ARRIVED, RETURNED
     private boolean isActive = false;
+    private String currentOrderNumber;
+    private boolean isReturnJourney = false;
 
     // Simulation parameters
     private static final double SPEED_KM_PER_HOUR = 1000.0;
@@ -28,9 +30,25 @@ public class DroneFlightSimulator {
     private double targetLng;
     private double targetLat;
 
+    /**
+     * Start flight WITHOUT order tracking (manual mode)
+     */
     public void startFlight(String droneId, List<LngLatAlt> path) {
         if (path == null || path.isEmpty()) {
             throw new IllegalArgumentException("Flight path cannot be empty");
+        }
+
+        // Check if this is a return journey
+        // Return journey = has current order number AND status was ARRIVED (waiting at customer)
+        String previousOrderNumber = this.currentOrderNumber;
+        boolean wasWaitingAtCustomer = (this.status != null && this.status.equals("ARRIVED"));
+
+        // If we have an order number and were waiting at customer, this is a return journey
+        this.isReturnJourney = (previousOrderNumber != null && wasWaitingAtCustomer);
+
+        // Keep order number for return journey, clear for new deliveries
+        if (!this.isReturnJourney) {
+            this.currentOrderNumber = null; // Clear for new deliveries
         }
 
         this.droneId = droneId;
@@ -39,23 +57,73 @@ public class DroneFlightSimulator {
         this.isActive = true;
         this.status = "FLYING";
 
-        // IMPORTANT: Set initial position
-        LngLatAlt start = path.getFirst();
-        this.currentLng = start.getLng();  // Make sure this is not null!
-        this.currentLat = start.getLat();  // Make sure this is not null!
+        // Set initial position
+        LngLatAlt start = path.get(0);
+        this.currentLng = start.getLng();
+        this.currentLat = start.getLat();
 
         // Set first target
         if (path.size() > 1) {
             LngLatAlt target = path.get(1);
-            this.targetLng = target.getLng();  // Make sure this is not null!
-            this.targetLat = target.getLat();  // Make sure this is not null!
+            this.targetLng = target.getLng();
+            this.targetLat = target.getLat();
         }
 
-        logger.info("Drone {} started flight with {} waypoints", droneId, path.size());
-        logger.info("Initial position: lng={}, lat={}", currentLng, currentLat);  // ADD THIS LOG
+        if (isReturnJourney) {
+            logger.info("🚁 Drone {} starting return journey to service point ({} waypoints)", droneId, path.size());
+        } else {
+            logger.info("🚁 Drone {} started delivery flight with {} waypoints", droneId, path.size());
+        }
+        logger.info("Initial position: lng={}, lat={}", currentLng, currentLat);
     }
 
-    public DronePositionUpdate updatePosition() {
+    /**
+     * Start flight WITH order tracking (for queue processor)
+     */
+    public void startFlightWithOrder(String droneId, List<LngLatAlt> path, String orderNumber) {
+        // Clear return journey flag for new deliveries
+        this.isReturnJourney = false;
+        this.isActive = false; // Mark as inactive so startFlight knows this is a NEW delivery
+
+        // Start the flight first
+        startFlight(droneId, path);
+
+        // THEN set the order number (after startFlight which might clear it)
+        this.currentOrderNumber = orderNumber;
+
+        logger.info("📦 Delivery flight started for order: {}", orderNumber);
+    }
+
+    /**
+     * Get current order number being delivered
+     */
+    public String getCurrentOrderNumber() {
+        return currentOrderNumber;
+    }
+
+    /**
+     * Get current drone position (called by WebSocket controller)
+     */
+    public DronePositionUpdate getCurrentPosition() {
+        if (!isActive || flightPath == null) {
+            return null;
+        }
+
+        // Update position
+        return updatePosition();
+    }
+
+    /**
+     * Check if drone is currently active
+     */
+    public boolean isDroneActive() {
+        return isActive;
+    }
+
+    /**
+     * Update drone position along flight path
+     */
+    private DronePositionUpdate updatePosition() {
         if (!isActive || flightPath == null) {
             return null;
         }
@@ -69,9 +137,18 @@ public class DroneFlightSimulator {
 
             if (currentPathIndex >= flightPath.size()) {
                 // Reached end of path
-                status = "DELIVERED";
-                isActive = false;
-                logger.info("Drone {} completed delivery", droneId);
+                if (isReturnJourney) {
+                    status = "RETURNED";
+                    isActive = false;
+                    logger.info("🏁 Drone {} returned to service point", droneId);
+                    // Clear return journey flag
+                    isReturnJourney = false;
+                    currentOrderNumber = null;
+                } else {
+                    status = "ARRIVED";
+                    isActive = false;
+                    logger.info("✅ Drone {} arrived at delivery location, waiting for collection", droneId);
+                }
             } else {
                 // Move to next waypoint
                 LngLatAlt nextPoint = flightPath.get(currentPathIndex);
@@ -83,7 +160,7 @@ public class DroneFlightSimulator {
                     targetLng = target.getLng();
                     targetLat = target.getLat();
 
-                    // Check if this is a hover point
+                    // Check if this is a hover point (same coordinates)
                     if (Math.abs(currentLng - targetLng) < 0.0000001 &&
                             Math.abs(currentLat - targetLat) < 0.0000001) {
                         status = "HOVERING";
@@ -93,7 +170,7 @@ public class DroneFlightSimulator {
                 }
             }
         } else {
-            // Move towards target
+            // Move towards target using angle-based interpolation
             double dx = targetLng - currentLng;
             double dy = targetLat - currentLat;
             double angle = Math.atan2(dy, dx);
@@ -110,37 +187,46 @@ public class DroneFlightSimulator {
             progressPercent = (currentPathIndex / (double) flightPath.size()) * 100.0;
         }
 
-        // IMPORTANT: Create the update object with explicit values
+        // Create position update
         DronePositionUpdate update = new DronePositionUpdate();
-        update.setDroneId(this.droneId);           // Set droneId
-        update.setLng(this.currentLng);            // Set lng
-        update.setLat(this.currentLat);            // Set lat
-        update.setStatus(this.status);             // Set status
-        update.setPercentComplete(progressPercent); // Set progress
+        update.setDroneId(this.droneId);
+        update.setLng(this.currentLng);
+        update.setLat(this.currentLat);
+        update.setStatus(this.status);
+        update.setPercentComplete(progressPercent);
         update.setTimestamp(System.currentTimeMillis());
+        update.setOrderNumber(this.currentOrderNumber); // Include order number
 
-        // Log to verify
-        logger.debug("Created update: droneId={}, lng={}, lat={}, status={}, progress={}%",
+        logger.debug("Position: droneId={}, lng={}, lat={}, status={}, order={}, progress={}%",
                 update.getDroneId(), update.getLng(), update.getLat(), update.getStatus(),
-                String.format("%.1f", progressPercent));
+                update.getOrderNumber(), String.format("%.1f", progressPercent));
 
         return update;
     }
 
+    /**
+     * Calculate distance between two points
+     */
     private double calculateDistance(double lng1, double lat1, double lng2, double lat2) {
         double dx = lng2 - lng1;
         double dy = lat2 - lat1;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    /**
+     * Stop current flight
+     */
     public void stopFlight() {
         this.isActive = false;
         this.status = "STOPPED";
+        this.currentOrderNumber = null;
         logger.info("Drone {} flight stopped", droneId);
     }
 
+    /**
+     * Check if simulator is active (legacy method)
+     */
     public boolean isActive() {
         return isActive;
     }
-
 }
