@@ -160,11 +160,20 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeMap() {
-    // Initialize map centered on Edinburgh with CARTO light theme
-    map = L.map('map').setView([55.9445, -3.1892], 14);
+    // 1. Initialize map, telling it NOT to create the default zoom control
+    map = L.map('map', {
+        zoomControl: false // <--- ADD THIS LINE
+    }).setView([55.9445, -3.1892], 14);
+
+    // 2. Add the tile layer
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 19,
         attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> contributors'
+    }).addTo(map);
+
+    // 3. Manually add the zoom control to the 'topright' corner // <--- ADD THIS SECTION
+    L.control.zoom({
+        position: 'topright'
     }).addTo(map);
 }
 

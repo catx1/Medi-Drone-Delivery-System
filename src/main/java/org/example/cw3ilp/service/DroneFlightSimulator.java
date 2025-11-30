@@ -22,7 +22,7 @@ public class DroneFlightSimulator {
     private boolean isReturnJourney = false;
 
     // Simulation parameters
-    private static final double SPEED_KM_PER_HOUR = 1000.0;
+    private static final double SPEED_KM_PER_HOUR = 160.0;
     private static final double SPEED_DEGREES_PER_SECOND = SPEED_KM_PER_HOUR / 111.0 / 3600.0;
 
     private double currentLng;

@@ -20,24 +20,38 @@
 </head>
 <body>
 <div class="container">
-    <!-- Header -->
+    <!-- Top Navigation Bar -->
     <div class="header">
-        <h1>MediDrone</h1>
-        <p>Fast, Reliable Medication Delivery by Drone</p>
+        <h1>MediDrone Delivery Order</h1>
     </div>
 
     <div class="main-content">
-        <!-- Left Panel: Order Form -->
-        <div class="card">
+        <!-- Full-Screen Map Background -->
+        <div class="map-wrapper">
+            <div id="map"></div>
+
+            <!-- Fixed center marker (hidden initially) -->
+            <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png"
+                 class="center-marker hidden"
+                 id="centerMarker"
+                 width="25"
+                 height="41"
+                 alt="Pickup location">
+
+            <!-- Address Display -->
+            <div class="address-display" id="addressDisplay">
+                Enter your address to get started
+            </div>
+        </div>
+
+        <!-- Floating Order Form Card -->
+        <div class="order-card">
             <h2 class="section-title">Place Your Order</h2>
 
             <!-- Order Form (visible by default) -->
             <div id="orderFormSection">
                 <!-- Step 1: Enter Address -->
                 <div id="step1" class="step">
-                    <div class="step-indicator">
-                        Step 1: Enter Your Address
-                    </div>
 
                     <div class="form-group">
                         <label for="address">Delivery Postcode</label>
@@ -52,7 +66,7 @@
                         </small>
 
                         <p class="info-text">
-                            Enter a UK postcode to find addresses
+                            Enter an Edinburgh postcode to find addresses
                         </p>
                     </div>
 
@@ -70,9 +84,6 @@
 
                 <!-- Step 2: Select Medication (hidden initially) -->
                 <div id="step2" class="step hidden">
-                    <div class="step-indicator">
-                        Step 2: Select Medication
-                    </div>
 
                     <div class="form-group">
                         <label for="medication">Medication</label>
@@ -121,27 +132,6 @@
                     <small style="display: block; text-align: center; margin-top: 10px; color: #666;">
                         Click this button after you've collected your medication
                     </small>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Panel: Map -->
-        <div class="card">
-            <h2 class="section-title">Delivery Location</h2>
-            <div class="map-container">
-                <div id="map"></div>
-
-                <!-- Fixed center marker (hidden initially) -->
-                <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png"
-                     class="center-marker hidden"
-                     id="centerMarker"
-                     width="25"
-                     height="41"
-                     alt="Pickup location">
-
-                <!-- Address Display -->
-                <div class="address-display" id="addressDisplay">
-                    Enter your address to get started
                 </div>
             </div>
         </div>
