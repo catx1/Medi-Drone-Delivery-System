@@ -25,6 +25,9 @@ public class DroneFlightSimulator {
     private static final double SPEED_KM_PER_HOUR = 160.0;
     private static final double SPEED_DEGREES_PER_SECOND = SPEED_KM_PER_HOUR / 111.0 / 3600.0;
 
+    /** Duration (in seconds) that drone hovers at delivery location for drop-off */
+    public static final int HOVER_DURATION_SECONDS = 3;
+
     private double currentLng;
     private double currentLat;
     private double targetLng;
@@ -70,9 +73,9 @@ public class DroneFlightSimulator {
         }
 
         if (isReturnJourney) {
-            logger.info("🚁 Drone {} starting return journey to service point ({} waypoints)", droneId, path.size());
+            logger.info("Drone {} starting return journey to service point ({} waypoints)", droneId, path.size());
         } else {
-            logger.info("🚁 Drone {} started delivery flight with {} waypoints", droneId, path.size());
+            logger.info("Drone {} started delivery flight with {} waypoints", droneId, path.size());
         }
         logger.info("Initial position: lng={}, lat={}", currentLng, currentLat);
     }
@@ -81,17 +84,14 @@ public class DroneFlightSimulator {
      * Start flight WITH order tracking (for queue processor)
      */
     public void startFlightWithOrder(String droneId, List<LngLatAlt> path, String orderNumber) {
-        // Clear return journey flag for new deliveries
-        this.isReturnJourney = false;
-        this.isActive = false; // Mark as inactive so startFlight knows this is a NEW delivery
-
-        // Start the flight first
+        // Start the flight (this will set isActive = true and calculate isReturnJourney)
         startFlight(droneId, path);
 
-        // THEN set the order number (after startFlight which might clear it)
+        // Set the order number for this delivery
+        // Note: startFlight may have cleared this for new deliveries, so we set it again
         this.currentOrderNumber = orderNumber;
 
-        logger.info("📦 Delivery flight started for order: {}", orderNumber);
+        logger.info("Delivery flight started for order: {}", orderNumber);
     }
 
     /**
@@ -140,14 +140,14 @@ public class DroneFlightSimulator {
                 if (isReturnJourney) {
                     status = "RETURNED";
                     isActive = false;
-                    logger.info("🏁 Drone {} returned to service point", droneId);
+                    logger.info("Drone {} returned to service point", droneId);
                     // Clear return journey flag
                     isReturnJourney = false;
                     currentOrderNumber = null;
                 } else {
                     status = "ARRIVED";
                     isActive = false;
-                    logger.info("✅ Drone {} arrived at delivery location, waiting for collection", droneId);
+                    logger.info("Drone {} arrived at delivery location, waiting for collection", droneId);
                 }
             } else {
                 // Move to next waypoint

@@ -20,21 +20,53 @@ public class ILPDataService {
 
     @Autowired
     public ILPDataService(String ilpEndpoint, RestTemplate restTemplate) {
-        this.ilpEndpoint = ilpEndpoint;
+        // Remove trailing slash if present to avoid double slashes in URLs
+        this.ilpEndpoint = ilpEndpoint.endsWith("/")
+            ? ilpEndpoint.substring(0, ilpEndpoint.length() - 1)
+            : ilpEndpoint;
         this.restTemplate = restTemplate;
-        logger.info("ILPDataService initialized with endpoint: {}", ilpEndpoint);
+        logger.info("ILPDataService initialized with endpoint: {}", this.ilpEndpoint);
     }
 
     /**
-     * Fetch all drones from ILP Service
+     * Retry wrapper for ILP service calls with exponential backoff
+     * Retries up to 3 times with delays of 500ms, 1000ms, 2000ms
+     */
+    private <T> T retryOnFailure(String operationName, java.util.function.Supplier<T> operation) {
+        int maxRetries = 3;
+        int delayMs = 500;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return operation.get();
+            } catch (Exception e) {
+                if (attempt == maxRetries) {
+                    logger.error("Failed {} after {} attempts: {}", operationName, maxRetries, e.getMessage());
+                    throw e;
+                }
+                logger.warn("Attempt {}/{} failed for {}: {}. Retrying in {}ms...",
+                        attempt, maxRetries, operationName, e.getMessage(), delayMs);
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during retry", ie);
+                }
+                delayMs *= 2; // Exponential backoff
+            }
+        }
+        throw new RuntimeException("Should not reach here");
+    }
+
+    /**
+     * Fetch all drones from ILP Service with automatic retry
      */
     public List<Drone> getAllDrones() {
-        try {
+        return retryOnFailure("fetch drones", () -> {
             String url = ilpEndpoint + "/drones";
             logger.info("Fetching drones from: {}", url);
 
             ResponseEntity<Drone[]> response = restTemplate.getForEntity(url, Drone[].class);
-
             Drone[] drones = response.getBody();
 
             if (drones != null) {
@@ -42,20 +74,16 @@ public class ILPDataService {
                 return List.of(drones);
             } else {
                 logger.warn("Received null response body from drones endpoint");
-                return new ArrayList<>();
+                throw new RuntimeException("Null response from drones endpoint");
             }
-
-        } catch (Exception e) {
-            logger.error("Error fetching drones from ILP service: {}", e.getMessage(), e);
-            return new ArrayList<>();
-        }
+        });
     }
 
     /**
-     * Fetch all service points from ILP service
+     * Fetch all service points from ILP service with automatic retry
      */
     public List<DronesAvailability.ServicePoint> getAllServicePoints() {
-        try {
+        return retryOnFailure("fetch service points", () -> {
             String url = ilpEndpoint + "/service-points";
             logger.info("Fetching service points from: {}", url);
 
@@ -66,20 +94,16 @@ public class ILPDataService {
                 return Arrays.asList(servicePoints);
             } else {
                 logger.warn("Received null response body from service-points endpoint");
-                return new ArrayList<>();
+                throw new RuntimeException("Null response from service-points endpoint");
             }
-
-        } catch (Exception e) {
-            logger.error("Error fetching service points");
-            return new ArrayList<>();
-        }
+        });
     }
 
     /**
-     * Fetch all restricted areas from ILP service
+     * Fetch all restricted areas from ILP service with automatic retry
      */
     public List<RestrictedArea> getAllRestrictedAreas() {
-        try {
+        return retryOnFailure("fetch restricted areas", () -> {
             String url = ilpEndpoint + "/restricted-areas";
             logger.info("Fetching restricted areas from: {}", url);
 
@@ -89,13 +113,10 @@ public class ILPDataService {
                 logger.info("Successfully fetched {} restricted areas", areas.length);
                 return Arrays.asList(areas);
             } else {
-                return new ArrayList<>();
+                logger.warn("Received null response body from restricted-areas endpoint");
+                throw new RuntimeException("Null response from restricted-areas endpoint");
             }
-
-        } catch (Exception e) {
-            logger.error("Error fetching restricted areas: {}", e.getMessage(), e);
-            return new ArrayList<>();
-        }
+        });
     }
 
 

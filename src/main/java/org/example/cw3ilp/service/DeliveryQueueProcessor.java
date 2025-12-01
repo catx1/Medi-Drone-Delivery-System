@@ -32,27 +32,34 @@ public class DeliveryQueueProcessor {
      */
     @Scheduled(fixedRate = 5000)
     public void processQueue() {
-        List<DeliveryOrder> queuedOrders = orderRepository
-                .findByStatusOrderByCreatedAtAsc(OrderStatus.QUEUED);
-
-        if (queuedOrders.isEmpty()) {
-            return;
-        }
-
-        // Check if drone is available
-        if (droneFlightSimulator.isActive()) {
-            log.debug("Drone busy, {} orders in queue", queuedOrders.size());
-            return;
-        }
-
-        // Process first order in queue
-        DeliveryOrder order = queuedOrders.get(0);
-        log.info("🚁 Processing order from queue: {}", order.getOrderNumber());
-
         try {
-            dispatchDrone(order);
+            List<DeliveryOrder> queuedOrders = orderRepository
+                    .findByStatusOrderByCreatedAtAsc(OrderStatus.QUEUED);
+
+            if (queuedOrders.isEmpty()) {
+                return;
+            }
+
+            // Check if drone is available
+            if (droneFlightSimulator.isActive()) {
+                log.debug("Drone busy, {} orders in queue", queuedOrders.size());
+                return;
+            }
+
+            // Process first order in queue
+            DeliveryOrder order = queuedOrders.get(0);
+            log.info("Processing order from queue: {}", order.getOrderNumber());
+
+            try {
+                dispatchDrone(order);
+            } catch (Exception e) {
+                log.error("Failed to dispatch drone for order: {}", order.getOrderNumber(), e);
+            }
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            // Database not ready yet - silently skip this iteration
+            log.trace("Database not ready, skipping queue processing");
         } catch (Exception e) {
-            log.error("Failed to dispatch drone for order: {}", order.getOrderNumber(), e);
+            log.error("Error processing queue", e);
         }
     }
 
@@ -77,7 +84,7 @@ public class DeliveryQueueProcessor {
 
             // Find nearest service point to delivery target
             DronesAvailability.ServicePoint nearestServicePoint =
-                    findNearestServicePoint(target, servicePoints);
+                    distanceService.findNearestServicePoint(servicePoints, target.getLng(), target.getLat());
 
             if (nearestServicePoint == null) {
                 throw new RuntimeException("No service points available");
@@ -111,20 +118,29 @@ public class DeliveryQueueProcessor {
             // Build delivery path: Service Point → Customer
             List<LngLatAlt> fullPath = new ArrayList<>(pathToTarget);
 
-            // Add hover at delivery location (landing/drop-off - 3 seconds)
-            fullPath.add(target);
-            fullPath.add(target);
-            fullPath.add(target);
+            // Add hover at delivery location (landing/drop-off)
+            // Each waypoint = 1 second, so add target multiple times to hover
+            for (int i = 0; i < DroneFlightSimulator.HOVER_DURATION_SECONDS; i++) {
+                fullPath.add(target);
+            }
 
             log.info("Delivery path calculated: {} waypoints", fullPath.size());
             log.info("Route: {} → {} (delivery)",
                     nearestServicePoint.getName(), order.getCustomerAddress());
 
+            // Use the drone that was already assigned during order creation
+            String assignedDroneId = order.getAssignedDroneId();
+            if (assignedDroneId == null || assignedDroneId.isEmpty()) {
+                log.warn("Order {} has no assigned drone, using default", order.getOrderNumber());
+                assignedDroneId = "DRONE-001";
+            }
+
             // Update order status to IN_TRANSIT
             order.setStatus(OrderStatus.IN_TRANSIT);
-            order.setAssignedDroneId("DRONE-001");
             order.setDispatchedAt(LocalDateTime.now());
             orderRepository.save(order);
+
+            log.info("Using assigned drone: {}", assignedDroneId);
 
             // Clear any previous flight state before starting new delivery
             if (droneFlightSimulator.isActive()) {
@@ -132,9 +148,9 @@ public class DeliveryQueueProcessor {
             }
 
             // Start NEW delivery flight with order context
-            droneFlightSimulator.startFlightWithOrder("DRONE-001", fullPath, order.getOrderNumber());
+            droneFlightSimulator.startFlightWithOrder(assignedDroneId, fullPath, order.getOrderNumber());
 
-            log.info("✅ Drone dispatched for order: {}", order.getOrderNumber());
+            log.info("Drone dispatched for order: {}", order.getOrderNumber());
 
         } catch (Exception e) {
             log.error("Failed to dispatch drone for order: {}", order.getOrderNumber(), e);
@@ -142,37 +158,4 @@ public class DeliveryQueueProcessor {
         }
     }
 
-    /**
-     * Find nearest service point to target location
-     */
-    private DronesAvailability.ServicePoint findNearestServicePoint(
-            LngLatAlt target,
-            List<DronesAvailability.ServicePoint> servicePoints) {
-
-        DronesAvailability.ServicePoint nearest = null;
-        double minDistance = Double.MAX_VALUE;
-
-        for (DronesAvailability.ServicePoint sp : servicePoints) {
-            if (sp.getLocation() == null) continue;
-
-            org.example.cw3ilp.api.model.LngLat spLocation = new org.example.cw3ilp.api.model.LngLat(
-                    sp.getLocation().getLng(),
-                    sp.getLocation().getLat()
-            );
-
-            org.example.cw3ilp.api.model.LngLat targetLocation = new org.example.cw3ilp.api.model.LngLat(
-                    target.getLng(),
-                    target.getLat()
-            );
-
-            double distance = distanceService.computeDistance(spLocation, targetLocation);
-
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearest = sp;
-            }
-        }
-
-        return nearest;
-    }
 }

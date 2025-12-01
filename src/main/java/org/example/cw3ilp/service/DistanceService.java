@@ -1,6 +1,11 @@
 package org.example.cw3ilp.service;
+import org.example.cw3ilp.api.model.DronesAvailability;
 import org.example.cw3ilp.api.model.LngLat;
 import org.springframework.stereotype.Service;
+
+import java.util.Comparator;
+import java.util.List;
+
 import static java.lang.Math.cos;
 import static java.lang.Math.sin;
 
@@ -19,11 +24,19 @@ public class DistanceService {
     /** Step distance of how far the point will move along the specified angle */
     private static final double STEP_DISTANCE = 0.00015;
 
+    /** Earth's radius in meters (mean radius) */
+    private static final double EARTH_RADIUS_METERS = 6371000.0;
+
+    /** Approximate meters per degree of latitude (at equator) */
+    private static final double METERS_PER_DEGREE = 111000.0;
+
     /**
-     * Computes Euclidean distance between two positions (using longitude and latitude)
+     * Computes distance between two geographic positions using the Haversine formula.
+     * This is accurate for real-world lat/lng coordinates on a sphere.
+     *
      * @param lngLat1 the first position
      * @param lngLat2 the second position
-     * @return the Euclidean distance in degrees
+     * @return the distance in degrees (for compatibility with existing code)
      * @throws IllegalArgumentException if either position is null
      */
     public double computeDistance(LngLat lngLat1, LngLat lngLat2) {
@@ -31,9 +44,23 @@ public class DistanceService {
             throw new IllegalArgumentException("Position cannot be null");
         }
 
-        double dx = lngLat2.getLng() - lngLat1.getLng();
-        double dy = lngLat2.getLat() - lngLat1.getLat();
-        return Math.sqrt(dx * dx + dy * dy);
+        // Convert to radians
+        double lat1Rad = Math.toRadians(lngLat1.getLat());
+        double lat2Rad = Math.toRadians(lngLat2.getLat());
+        double deltaLat = Math.toRadians(lngLat2.getLat() - lngLat1.getLat());
+        double deltaLng = Math.toRadians(lngLat2.getLng() - lngLat1.getLng());
+
+        // Haversine formula
+        double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                   Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+                   Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        // Distance in meters
+        double distanceMeters = EARTH_RADIUS_METERS * c;
+
+        // Convert to degrees for compatibility with existing threshold-based code
+        return distanceMeters / METERS_PER_DEGREE;
     }
 
     /**
@@ -98,5 +125,27 @@ public class DistanceService {
         double nextLat = startPos.getLat() + dy;
 
         return new LngLat(nextLng, nextLat);
+    }
+
+    /**
+     * Finds the nearest service point to a target location
+     * @param servicePoints list of available service points
+     * @param targetLng target longitude
+     * @param targetLat target latitude
+     * @return the nearest service point, or null if none available
+     */
+    public DronesAvailability.ServicePoint findNearestServicePoint(
+            List<DronesAvailability.ServicePoint> servicePoints,
+            double targetLng, double targetLat) {
+
+        LngLat target = new LngLat(targetLng, targetLat);
+
+        return servicePoints.stream()
+                .filter(sp -> sp.getLocation() != null)
+                .min(Comparator.comparingDouble(sp ->
+                        computeDistance(
+                                new LngLat(sp.getLocation().getLng(), sp.getLocation().getLat()),
+                                target)))
+                .orElse(null);
     }
 }

@@ -178,7 +178,7 @@ public class OrderController {
             }
 
             // Create order with address AND coordinates
-            String orderNumber = "ORD-" + System.currentTimeMillis();
+            String orderNumber = orderService.generateOrderNumber();
 
             DeliveryOrder order = new DeliveryOrder();
             order.setOrderNumber(orderNumber);
@@ -197,7 +197,7 @@ public class OrderController {
             // Save order
             deliveryOrderRepository.save(order);
 
-            log.info("✅ Order created: {} for {}", orderNumber, address);
+            log.info("Order created: {} for {}", orderNumber, address);
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
@@ -265,6 +265,63 @@ public class OrderController {
         } catch (Exception e) {
             log.error("Geocoding error: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ArrayList<>());
+        }
+    }
+
+    /**
+     * Reverse geocode coordinates to get nearest address
+     */
+    @GetMapping("/reverse-geocode")
+    public ResponseEntity<Map<String, Object>> reverseGeocode(
+            @RequestParam double lat,
+            @RequestParam double lng) {
+
+        log.info("Reverse geocoding request for coordinates: lat={}, lng={}", lat, lng);
+
+        try {
+            // Build Nominatim reverse geocode URL
+            String url = UriComponentsBuilder
+                    .fromHttpUrl("https://nominatim.openstreetmap.org/reverse")
+                    .queryParam("format", "json")
+                    .queryParam("lat", lat)
+                    .queryParam("lon", lng)
+                    .queryParam("addressdetails", 1)
+                    .build()
+                    .toUriString();
+
+            // Create RestTemplate with user agent header (required by Nominatim)
+            RestTemplate restTemplate = new RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("User-Agent", "MediDrone-App/1.0");
+
+            org.springframework.http.HttpEntity<String> entity = new org.springframework.http.HttpEntity<>(headers);
+
+            // Make request
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    org.springframework.http.HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+
+            // Parse JSON response
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode result = mapper.readTree(response.getBody());
+
+            // Convert to map
+            Map<String, Object> resultMap = new HashMap<>();
+            if (result.has("display_name")) {
+                resultMap.put("display_name", result.get("display_name").asText());
+                resultMap.put("lat", result.get("lat").asText());
+                resultMap.put("lon", result.get("lon").asText());
+            }
+
+            return ResponseEntity.ok(resultMap);
+
+        } catch (Exception e) {
+            log.error("Reverse geocoding error: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to reverse geocode coordinates"));
         }
     }
 }

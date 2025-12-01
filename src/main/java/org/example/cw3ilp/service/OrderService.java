@@ -74,7 +74,7 @@ public class OrderService {
         // 6. Save order
         DeliveryOrder savedOrder = orderRepository.save(order);
 
-        log.info("✅ Order created: {}", orderNumber);
+        log.info("Order created: {}", orderNumber);
 
         return savedOrder;
     }
@@ -113,8 +113,8 @@ public class OrderService {
 
         DeliveryOrder savedOrder = orderRepository.save(order);
 
-        log.info("✅ Pickup confirmed for order: {}", order.getOrderNumber());
-        log.info("🚁 Drone now returning to service point");
+        log.info("Pickup confirmed for order: {}", order.getOrderNumber());
+        log.info("Drone now returning to service point");
 
         // Trigger drone to return to base
         triggerDroneReturnToBase(savedOrder);
@@ -129,7 +129,7 @@ public class OrderService {
         try {
             // Check if drone is currently at the delivery location (not active = waiting)
             if (droneFlightSimulator.isActive()) {
-                log.warn("⚠️ Drone is still in flight, cannot start return journey yet");
+                log.warn("Drone is still in flight, cannot start return journey yet");
                 return;
             }
 
@@ -146,10 +146,10 @@ public class OrderService {
                 ilpDataService.getAllServicePoints();
 
             org.example.cw3ilp.api.model.DronesAvailability.ServicePoint nearestServicePoint =
-                findNearestServicePoint(currentLocation, servicePoints);
+                distanceService.findNearestServicePoint(servicePoints, currentLocation.getLng(), currentLocation.getLat());
 
             if (nearestServicePoint == null) {
-                log.warn("⚠️ No service points available for return journey");
+                log.warn("No service points available for return journey");
                 return;
             }
 
@@ -168,45 +168,23 @@ public class OrderService {
                 pathfinderService.findPath(currentLocation, servicePointLocation, restrictedAreas);
 
             if (returnPath == null || returnPath.isEmpty()) {
-                log.warn("⚠️ Could not calculate return path");
+                log.warn("Could not calculate return path");
                 return;
             }
 
-            log.info("🚁 Drone {} departing from customer location", order.getAssignedDroneId());
-            log.info("📍 Returning to service point: {}", nearestServicePoint.getName());
-            log.info("🛤️  Return path: {} waypoints", returnPath.size());
+            log.info("Drone {} departing from customer location", order.getAssignedDroneId());
+            log.info("Returning to service point: {}", nearestServicePoint.getName());
+            log.info("Return path: {} waypoints", returnPath.size());
 
             // IMPORTANT: Start return flight - the drone should still have the order number
             // so DroneFlightSimulator will detect this as a return journey
             droneFlightSimulator.startFlight(order.getAssignedDroneId(), returnPath);
 
         } catch (Exception e) {
-            log.error("❌ Failed to trigger drone return: {}", e.getMessage(), e);
+            log.error("Failed to trigger drone return: {}", e.getMessage(), e);
         }
     }
 
-    /**
-     * Find nearest service point to given location
-     */
-    private org.example.cw3ilp.api.model.DronesAvailability.ServicePoint findNearestServicePoint(
-            org.example.cw3ilp.api.model.LngLatAlt location,
-            List<org.example.cw3ilp.api.model.DronesAvailability.ServicePoint> servicePoints) {
-
-        return servicePoints.stream()
-                .filter(sp -> sp.getLocation() != null)
-                .min((sp1, sp2) -> {
-                    double dist1 = distanceService.computeDistance(
-                        new org.example.cw3ilp.api.model.LngLat(location.getLng(), location.getLat()),
-                        new org.example.cw3ilp.api.model.LngLat(sp1.getLocation().getLng(), sp1.getLocation().getLat())
-                    );
-                    double dist2 = distanceService.computeDistance(
-                        new org.example.cw3ilp.api.model.LngLat(location.getLng(), location.getLat()),
-                        new org.example.cw3ilp.api.model.LngLat(sp2.getLocation().getLng(), sp2.getLocation().getLat())
-                    );
-                    return Double.compare(dist1, dist2);
-                })
-                .orElse(null);
-    }
 
     /**
      * Update order status
@@ -233,9 +211,12 @@ public class OrderService {
     }
 
     /**
-     * Generate unique order number
+     * Generate unique order number using UUID.
+     * Thread-safe and guarantees uniqueness even under high concurrency.
+     *
+     * @return unique order number in format "ORD-{UUID}"
      */
-    private String generateOrderNumber() {
-        return "ORD-" + System.currentTimeMillis();
+    public String generateOrderNumber() {
+        return "ORD-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }

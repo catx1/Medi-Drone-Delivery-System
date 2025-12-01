@@ -5,12 +5,25 @@ import org.example.cw3ilp.api.dto.CalcDeliveryPathResponse;
 import org.example.cw3ilp.api.dto.MedDispatchRec;
 import org.example.cw3ilp.api.dto.QueryCriteriaRequest;
 import org.example.cw3ilp.api.model.*;
-import org.example.cw3ilp.service.*;
+import org.example.cw3ilp.entity.Medication;
+import org.example.cw3ilp.repository.MedicationRepository;
+import org.example.cw3ilp.service.DistanceService;
+import org.example.cw3ilp.service.DroneFlightSimulator;
+import org.example.cw3ilp.service.DroneService;
+import org.example.cw3ilp.service.GeocodingService;
+import org.example.cw3ilp.service.ILPDataService;
+import org.example.cw3ilp.service.PathfinderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.*;
 
@@ -24,19 +37,22 @@ public class DroneController {
     private final ILPDataService ilpDataService;
     private final DistanceService distanceService;
     private final GeocodingService geocodingService;
+    private final MedicationRepository medicationRepository;
 
     public DroneController(DroneService droneService,
                            DroneFlightSimulator droneFlightSimulator,
                            PathfinderService pathfinderService,
                            ILPDataService ilpDataService,
                            DistanceService distanceService,
-                           GeocodingService geocodingService) {
+                           GeocodingService geocodingService,
+                           MedicationRepository medicationRepository) {
         this.droneService = droneService;
         this.droneFlightSimulator = droneFlightSimulator;
         this.pathfinderService = pathfinderService;
         this.ilpDataService = ilpDataService;
         this.distanceService = distanceService;
         this.geocodingService = geocodingService;
+        this.medicationRepository = medicationRepository;
     }
 
 
@@ -303,10 +319,11 @@ public class DroneController {
             // Combine paths for round trip starting and ending at service point
             List<LngLatAlt> fullPath = new ArrayList<>(pathToTarget);
 
-            // Add hover at delivery (drop-off - 3 seconds)
-            fullPath.add(target);
-            fullPath.add(target);
-            fullPath.add(target);
+            // Add hover at delivery (drop-off)
+            // Each waypoint = 1 second, so add target multiple times to hover
+            for (int i = 0; i < DroneFlightSimulator.HOVER_DURATION_SECONDS; i++) {
+                fullPath.add(target);
+            }
 
             // Add return path (skip first point to avoid duplicate)
             if (!pathBackToServicePoint.isEmpty()) {
@@ -399,7 +416,7 @@ public class DroneController {
             List<DronesAvailability.ServicePoint> servicePoints = ilpDataService.getAllServicePoints();
 
             // Find nearest service point
-            DronesAvailability.ServicePoint nearestServicePoint = findNearestServicePoint(servicePoints, targetLat, targetLng);
+            DronesAvailability.ServicePoint nearestServicePoint = distanceService.findNearestServicePoint(servicePoints, targetLng, targetLat);
 
             if (nearestServicePoint == null) {
                 return ResponseEntity.badRequest()
@@ -479,20 +496,6 @@ public class DroneController {
         }
     }
 
-    private DronesAvailability.ServicePoint findNearestServicePoint(
-            List<DronesAvailability.ServicePoint> servicePoints,
-            double targetLat, double targetLng) {
-
-        LngLat target = new LngLat(targetLng, targetLat);
-
-        return servicePoints.stream()
-                .filter(sp -> sp.getLocation() != null)
-                .min(Comparator.comparingDouble(sp ->
-                        distanceService.computeDistance(
-                                new LngLat(sp.getLocation().getLng(), sp.getLocation().getLat()),
-                                target)))
-                .orElse(null);
-    }
 
     private double calculatePathDistanceAlt(List<LngLatAlt> path) {
         double totalDistance = 0;
@@ -506,19 +509,92 @@ public class DroneController {
         return totalDistance;
     }
 
+    /**
+     * Assign a suitable drone based on medication requirements and availability.
+     * Optimizes resource allocation by preferring non-cooling drones when cooling isn't needed.
+     *
+     * @param requiresRefrigeration whether the medication needs cooling
+     * @return drone ID of an available suitable drone
+     */
     private String assignSuitableDrone(boolean requiresRefrigeration) {
-        // Simple assignment logic - in real app, check availability
+        logger.info("Assigning drone - requires cooling: {}", requiresRefrigeration);
+
+        // Get all drones from ILP service
+        List<Drone> allDrones = ilpDataService.getAllDrones();
+
+        Drone selectedDrone = null;
+
         if (requiresRefrigeration) {
-            return "DRONE-COOL-001"; // Drone with refrigeration
+            // MUST have cooling - filter strictly
+            List<Drone> coolingDrones = allDrones.stream()
+                    .filter(drone -> {
+                        if (drone.getCapability() == null) {
+                            return false;
+                        }
+                        Boolean hasCooling = drone.getCapability().getCooling();
+                        return hasCooling != null && hasCooling;
+                    })
+                    .toList();
+
+            if (coolingDrones.isEmpty()) {
+                logger.warn("No cooling drones available for refrigerated medication");
+                throw new RuntimeException("No cooling drones available");
+            }
+
+            selectedDrone = coolingDrones.get(0);
+            logger.info("Assigned cooling drone: {} (medication requires refrigeration)", selectedDrone.getId());
+
         } else {
-            return "DRONE-STD-001"; // Standard drone
+            // Doesn't need cooling - PREFER non-cooling drones first
+            // This saves specialized cooling drones for when they're actually needed
+
+            // Try non-cooling drones first
+            List<Drone> nonCoolingDrones = allDrones.stream()
+                    .filter(drone -> {
+                        if (drone.getCapability() == null) {
+                            return false;
+                        }
+                        Boolean hasCooling = drone.getCapability().getCooling();
+                        return hasCooling == null || !hasCooling;
+                    })
+                    .toList();
+
+            if (!nonCoolingDrones.isEmpty()) {
+                selectedDrone = nonCoolingDrones.get(0);
+                logger.info("Assigned standard drone: {} (cooling not required, using non-cooling drone)",
+                        selectedDrone.getId());
+            } else {
+                // Fallback: if no non-cooling drones, use cooling drone anyway
+                List<Drone> coolingDrones = allDrones.stream()
+                        .filter(drone -> drone.getCapability() != null)
+                        .toList();
+
+                if (coolingDrones.isEmpty()) {
+                    logger.warn("No drones available at all");
+                    throw new RuntimeException("No drones available");
+                }
+
+                selectedDrone = coolingDrones.get(0);
+                logger.info("Assigned cooling drone: {} (fallback - no standard drones available)",
+                        selectedDrone.getId());
+            }
         }
+
+        return selectedDrone.getId();
     }
 
+    /**
+     * Check if a medication requires refrigeration by looking up in database.
+     *
+     * @param medicationId the ID of the medication
+     * @return true if refrigeration is required, false otherwise
+     */
     private boolean checkMedicationRequiresRefrigeration(Long medicationId) {
-        // TODO: Implement actual database lookup
-        // For now, assume medication IDs 1-3 need refrigeration
-        return medicationId <= 3;
+        Medication medication = medicationRepository.findById(medicationId)
+                .orElseThrow(() -> new RuntimeException("Medication not found with id: " + medicationId));
+
+        Boolean requiresRefrigeration = medication.getRequiresRefrigeration();
+        return requiresRefrigeration != null && requiresRefrigeration;
     }
 
 }

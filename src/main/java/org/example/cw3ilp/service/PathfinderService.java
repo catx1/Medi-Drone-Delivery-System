@@ -169,7 +169,9 @@ public class PathfinderService {
         int bestDirection = calculateBestDirection(start, goal);
 
         int iterations = 0;
-        int maxIterations = 10000000;
+        // Reasonable safety limit: 100k iterations prevents infinite loops
+        // while still being far above typical usage (~1,500 iterations)
+        int maxIterations = 100000;
 
         while (!openSet.isEmpty() && iterations < maxIterations) {
             iterations++;
