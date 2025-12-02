@@ -158,10 +158,9 @@ public class DeliveryQueueProcessor {
 
             log.info("Using assigned drone: {}", assignedDroneId);
 
-            // Clear any previous flight state before starting new delivery
-            if (droneFlightSimulator.isActive()) {
-                droneFlightSimulator.stopFlight();
-            }
+            // ALWAYS clear any previous flight state before starting new delivery
+            // This ensures return journey detection works correctly
+            droneFlightSimulator.stopFlight();
 
             // Start NEW delivery flight with order context
             droneFlightSimulator.startFlightWithOrder(assignedDroneId, fullPath, order.getOrderNumber());

@@ -79,9 +79,9 @@ public class DroneFlightSimulator {
         }
 
         if (isReturnJourney) {
-            logger.info("Drone {} starting return journey to service point ({} waypoints)", droneId, path.size());
+            logger.info("Drone starting return journey to service point ({} waypoints)", droneId, path.size());
         } else {
-            logger.info("Drone {} started delivery flight with {} waypoints", droneId, path.size());
+            logger.info("Drone started delivery flight with {} waypoints", droneId, path.size());
         }
         logger.info("Initial position: lng={}, lat={}", currentLng, currentLat);
     }
@@ -132,7 +132,7 @@ public class DroneFlightSimulator {
                 if (isReturnJourney) {
                     status = "RETURNED";
                     isActive = false;
-                    logger.info("Drone {} returned to service point", droneId);
+                    logger.info("Drone returned to service point", droneId);
                     // Clear return journey flag
                     isReturnJourney = false;
                     currentOrderNumber = null;
