@@ -1,5 +1,6 @@
 package org.example.cw3ilp.service;
 
+import lombok.Getter;
 import org.example.cw3ilp.api.model.LngLatAlt;
 import org.example.cw3ilp.api.dto.DronePositionUpdate;
 import org.slf4j.Logger;
@@ -18,6 +19,11 @@ public class DroneFlightSimulator {
     private String droneId;
     private String status = "WAITING"; // WAITING, FLYING, HOVERING, ARRIVED, RETURNED
     private boolean isActive = false;
+    /**
+     * -- GETTER --
+     *  Get current order number being delivered
+     */
+    @Getter
     private String currentOrderNumber;
     private boolean isReturnJourney = false;
 
@@ -42,7 +48,7 @@ public class DroneFlightSimulator {
         }
 
         // Check if this is a return journey
-        // Return journey = has current order number AND status was ARRIVED (waiting at customer)
+        // Has current order number AND status was arrived (waiting at customer)
         String previousOrderNumber = this.currentOrderNumber;
         boolean wasWaitingAtCustomer = (this.status != null && this.status.equals("ARRIVED"));
 
@@ -61,7 +67,7 @@ public class DroneFlightSimulator {
         this.status = "FLYING";
 
         // Set initial position
-        LngLatAlt start = path.get(0);
+        LngLatAlt start = path.getFirst();
         this.currentLng = start.getLng();
         this.currentLat = start.getLat();
 
@@ -95,13 +101,6 @@ public class DroneFlightSimulator {
     }
 
     /**
-     * Get current order number being delivered
-     */
-    public String getCurrentOrderNumber() {
-        return currentOrderNumber;
-    }
-
-    /**
      * Get current drone position (called by WebSocket controller)
      */
     public DronePositionUpdate getCurrentPosition() {
@@ -111,13 +110,6 @@ public class DroneFlightSimulator {
 
         // Update position
         return updatePosition();
-    }
-
-    /**
-     * Check if drone is currently active
-     */
-    public boolean isDroneActive() {
-        return isActive;
     }
 
     /**

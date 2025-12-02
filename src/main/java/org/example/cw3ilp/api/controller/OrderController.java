@@ -54,6 +54,15 @@ public class OrderController {
         log.info("Creating order: address={}, medicationId={}, quantity={}",
                 address, medicationId, quantity);
 
+        // Validate quantity
+        if (quantity < 1 || quantity > 5) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of(
+                            "success", false,
+                            "error", "Quantity must be between 1 and 5"
+                    ));
+        }
+
         try {
             DeliveryOrder order = orderService.createOrder(address, medicationId, quantity);
 
@@ -159,14 +168,24 @@ public class OrderController {
      */
     @PostMapping("/create-with-address")
     public ResponseEntity<Map<String, Object>> createOrderWithAddress(
-            @RequestParam String address,
-            @RequestParam double lat,
-            @RequestParam double lng,
-            @RequestParam Long medicationId,
-            @RequestParam(defaultValue = "1") int quantity) {
+            @RequestBody Map<String, Object> request) {
 
-        log.info("Creating order: address={}, lat={}, lng={}, medicationId={}",
-                address, lat, lng, medicationId);
+        String address = (String) request.get("address");
+        double lat = parseDouble(request.get("lat"));
+        double lng = parseDouble(request.get("lng"));
+        Long medicationId = parseLong(request.get("medicationId"));
+        int quantity = request.containsKey("quantity") ? parseInt(request.get("quantity")) : 1;
+        List<?> calculatedPathList = (List<?>) request.get("calculatedPath");
+        String assignedDroneId = (String) request.get("assignedDroneId");
+
+        log.info("Creating order: address={}, lat={}, lng={}, medicationId={}, assignedDrone={}",
+                address, lat, lng, medicationId, assignedDroneId);
+
+        // Validate quantity
+        if (quantity < 1 || quantity > 5) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "error", "Quantity must be between 1 and 5"));
+        }
 
         try {
             // Validate medication
@@ -175,6 +194,13 @@ public class OrderController {
 
             if (medication.getStockQuantity() == null || medication.getStockQuantity() < quantity) {
                 throw new RuntimeException("Insufficient stock");
+            }
+
+            // Serialize calculatedPath to JSON string if provided
+            String calculatedPathJson = null;
+            if (calculatedPathList != null && !calculatedPathList.isEmpty()) {
+                ObjectMapper mapper = new ObjectMapper();
+                calculatedPathJson = mapper.writeValueAsString(calculatedPathList);
             }
 
             // Create order with address AND coordinates
@@ -189,6 +215,8 @@ public class OrderController {
             order.setQuantity(quantity);
             order.setStatus(OrderStatus.QUEUED);
             order.setCreatedAt(java.time.LocalDateTime.now());
+            order.setCalculatedPath(calculatedPathJson);  // Store the pre-calculated path
+            order.setAssignedDroneId(assignedDroneId);    // Store the assigned drone ID
 
             // Update stock
             medication.setStockQuantity(medication.getStockQuantity() - quantity);
@@ -323,5 +351,41 @@ public class OrderController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to reverse geocode coordinates"));
         }
+    }
+
+    /**
+     * Helper method to parse a value as Long (handles both String and Number types)
+     */
+    private Long parseLong(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        } else if (value instanceof String) {
+            return Long.parseLong((String) value);
+        }
+        throw new IllegalArgumentException("Cannot parse value as Long: " + value);
+    }
+
+    /**
+     * Helper method to parse a value as Integer (handles both String and Number types)
+     */
+    private int parseInt(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        } else if (value instanceof String) {
+            return Integer.parseInt((String) value);
+        }
+        throw new IllegalArgumentException("Cannot parse value as Integer: " + value);
+    }
+
+    /**
+     * Helper method to parse a value as Double (handles both String and Number types)
+     */
+    private double parseDouble(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        } else if (value instanceof String) {
+            return Double.parseDouble((String) value);
+        }
+        throw new IllegalArgumentException("Cannot parse value as Double: " + value);
     }
 }

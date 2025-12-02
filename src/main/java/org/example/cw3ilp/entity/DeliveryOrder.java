@@ -43,6 +43,9 @@ public class DeliveryOrder {
     @Column(name = "assigned_drone_id", length = 50)
     private String assignedDroneId;
 
+    @Column(name = "calculated_path", columnDefinition = "TEXT")
+    private String calculatedPath;  // JSON string of the pre-calculated flight path
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 

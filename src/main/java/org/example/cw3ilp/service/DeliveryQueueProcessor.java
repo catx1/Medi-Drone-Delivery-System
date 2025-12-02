@@ -14,6 +14,10 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 @Service
 @RequiredArgsConstructor
@@ -104,24 +108,36 @@ public class DeliveryQueueProcessor {
                     )
             );
 
-            // Get restricted areas for pathfinding
-            List<RestrictedArea> restrictedAreas = ilpDataService.getAllRestrictedAreas();
+            List<LngLatAlt> fullPath;
 
-            // Calculate path: Service Point -> Customer (ONE-WAY delivery only)
-            List<LngLatAlt> pathToTarget = pathfinderService.findPath(
-                    servicePointLocation, target, restrictedAreas);
+            // Check if order has a pre-calculated path stored
+            if (order.getCalculatedPath() != null && !order.getCalculatedPath().isEmpty()) {
+                log.info("Using pre-calculated path from order (skipping pathfinding)");
 
-            if (pathToTarget == null) {
-                throw new RuntimeException("Could not find valid path to customer");
-            }
+                // Deserialize the stored path from JSON (already includes hover points)
+                fullPath = deserializeFlightPath(order.getCalculatedPath());
 
-            // Build delivery path: Service Point → Customer
-            List<LngLatAlt> fullPath = new ArrayList<>(pathToTarget);
+                if (fullPath == null || fullPath.isEmpty()) {
+                    log.warn("Failed to deserialize stored path, recalculating...");
+                    // Fallback to recalculating
+                    fullPath = calculateNewPath(servicePointLocation, target);
 
-            // Add hover at delivery location (landing/drop-off)
-            // Each waypoint = 1 second, so add target multiple times to hover
-            for (int i = 0; i < DroneFlightSimulator.HOVER_DURATION_SECONDS; i++) {
-                fullPath.add(target);
+                    // Add hover points for newly calculated path
+                    for (int i = 0; i < DroneFlightSimulator.HOVER_DURATION_SECONDS; i++) {
+                        fullPath.add(target);
+                    }
+                }
+                // else: pre-calculated path already has hover points, don't add again
+            } else {
+                log.info("No pre-calculated path found, calculating new path...");
+                // Calculate path: Service Point -> Customer (ONE-WAY delivery only)
+                fullPath = calculateNewPath(servicePointLocation, target);
+
+                // Add hover at delivery location (landing/drop-off)
+                // Each waypoint = 1 second, so add target multiple times to hover
+                for (int i = 0; i < DroneFlightSimulator.HOVER_DURATION_SECONDS; i++) {
+                    fullPath.add(target);
+                }
             }
 
             log.info("Delivery path calculated: {} waypoints", fullPath.size());
@@ -155,6 +171,49 @@ public class DeliveryQueueProcessor {
         } catch (Exception e) {
             log.error("Failed to dispatch drone for order: {}", order.getOrderNumber(), e);
             throw e;
+        }
+    }
+
+    /**
+     * Calculate a new flight path from service point to target
+     */
+    private List<LngLatAlt> calculateNewPath(LngLatAlt servicePointLocation, LngLatAlt target) {
+        // Get restricted areas for pathfinding
+        List<RestrictedArea> restrictedAreas = ilpDataService.getAllRestrictedAreas();
+
+        // Calculate path: Service Point -> Customer (ONE-WAY delivery only)
+        List<LngLatAlt> pathToTarget = pathfinderService.findPath(
+                servicePointLocation, target, restrictedAreas);
+
+        if (pathToTarget == null) {
+            throw new RuntimeException("Could not find valid path to customer");
+        }
+
+        // Build delivery path: Service Point → Customer
+        return new ArrayList<>(pathToTarget);
+    }
+
+    /**
+     * Deserialize flight path from JSON string
+     */
+    private List<LngLatAlt> deserializeFlightPath(String jsonPath) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            TypeReference<List<Map<String, Double>>> typeRef = new TypeReference<>() {};
+
+            List<Map<String, Double>> pathData = mapper.readValue(jsonPath, typeRef);
+
+            List<LngLatAlt> path = new ArrayList<>();
+            for (Map<String, Double> point : pathData) {
+                double lat = point.get("lat");
+                double lng = point.get("lng");
+                path.add(new LngLatAlt(lng, lat, 0.0));
+            }
+
+            return path;
+        } catch (Exception e) {
+            log.error("Failed to deserialize flight path: {}", e.getMessage());
+            return null;
         }
     }
 

@@ -32,11 +32,11 @@
             <div id="map"></div>
 
             <!-- Fixed center marker (hidden initially) -->
-            <img src="/images/location_marker.png"
+            <img src="/images/loc_marker.png"
                  class="center-marker hidden"
                  id="centerMarker"
-                 width="32"
-                 height="46"
+                 width="26"
+                 height="38"
                  alt="Pickup location">
 
             <!-- Address Display -->
@@ -93,19 +93,42 @@
                         </select>
                     </div>
 
-                    <!-- Delivery Preview (shown after medication selection) -->
-                    <div id="deliveryPreview" style="display: none;"></div>
-
                     <div class="form-group">
-                        <label for="quantity">Quantity</label>
-                        <input type="number" id="quantity" value="1" min="1" max="10">
+                        <label for="quantity">Quantity (max 5)</label>
+                        <input type="number" id="quantity" value="1" min="1" max="5">
+                        <small id="quantityError" style="color: #f44336; display: none; margin-top: 5px;">
+                            Quantity must be between 1 and 5
+                        </small>
                     </div>
 
-                    <button class="btn" onclick="placeOrder()">Place Order</button>
-                    <button class="btn" onclick="backToStep1()"
-                            style="margin-top: 10px; background: #6c757d;">
-                        Change Location
-                    </button>
+                    <!-- Confirm Medication Selection Buttons -->
+                    <div id="confirmMedicationSection" class="hidden">
+                        <button class="btn" id="confirmMedicationBtn" onclick="confirmMedicationSelection()">
+                            Confirm
+                        </button>
+                        <button class="btn" id="changeMedicationBtn" onclick="backToStep1()"
+                                style="margin-top: 10px; background: #6c757d;">
+                            Change Location
+                        </button>
+                    </div>
+
+                    <!-- Pathfinding Loading State -->
+                    <div id="pathfindingLoader" class="pathfinding-loader hidden">
+                        <div class="spinner"></div>
+                        <span class="pathfinding-text">Finding a path</span>
+                    </div>
+
+                    <!-- Delivery Preview (shown after pathfinding) -->
+                    <div id="deliveryPreview" style="display: none;"></div>
+
+                    <!-- Place Order Section (shown after path is found) -->
+                    <div id="placeOrderSection" class="hidden">
+                        <button class="btn" id="placeOrderBtn" onclick="placeOrder()">Place Order</button>
+                        <button class="btn" onclick="backToStep1()"
+                                style="margin-top: 10px; background: #6c757d;">
+                            Change Location
+                        </button>
+                    </div>
                 </div>
             </div>
 

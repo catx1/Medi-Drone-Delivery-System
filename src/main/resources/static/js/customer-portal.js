@@ -153,6 +153,18 @@ function updateUIForState() {
             orderStatusSection.classList.remove('hidden');
             confirmPickupSection.classList.add('hidden');
 
+            // Hide the section title for collected state
+            const sectionTitle = document.querySelector('.section-title');
+            if (sectionTitle) {
+                sectionTitle.style.display = 'none';
+            }
+
+            // Make card more compact for collected state
+            const orderCard = document.querySelector('.order-card');
+            if (orderCard) {
+                orderCard.style.padding = '20px';
+            }
+
             // Hide drone - customer doesn't need to see return journey
             if (droneMarker) {
                 map.removeLayer(droneMarker);
@@ -163,12 +175,12 @@ function updateUIForState() {
                 flightPathLine = null;
             }
 
-            // Show completion screen
+            // Show completion screen (more compact)
             const statusMsg = document.getElementById('statusMessage');
             statusMsg.innerHTML = `
-                <div style="text-align: center; padding: 40px 20px;">
-                    <h2 style="color: #4CAF50; margin: 20px 0; font-size: 28px;">Order Collected!</h2>
-                    <button class="btn" onclick="resetForNewOrder()" style="max-width: 300px; margin: 0 auto;">
+                <div style="text-align: center; padding: 20px 10px;">
+                    <h2 style="color: #4CAF50; margin: 15px 0; font-size: 24px;">Order Collected!</h2>
+                    <button class="btn" onclick="resetForNewOrder()" style="max-width: 250px; margin: 0 auto;">
                         Place New Order
                     </button>
                 </div>
@@ -235,6 +247,16 @@ function resetForNewOrder() {
     // Reset map view
     map.setView([55.9445, -3.1892], 14);
     document.getElementById('addressDisplay').textContent = 'Enter your address to get started';
+
+    // Restore section title and card padding
+    const sectionTitle = document.querySelector('.section-title');
+    if (sectionTitle) {
+        sectionTitle.style.display = '';
+    }
+    const orderCard = document.querySelector('.order-card');
+    if (orderCard) {
+        orderCard.style.padding = '';
+    }
 
     // Go back to initial state
     setOrderState('INITIAL');
@@ -346,7 +368,7 @@ function initAutocomplete() {
     const resultsContainer = document.createElement('div');
 
     resultsContainer.style.cssText = `
-        position: absolute;
+        position: fixed;
         background: white;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
@@ -355,12 +377,18 @@ function initAutocomplete() {
         z-index: 1000;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         display: none;
-        width: 100%;
-        margin-top: 2px;
     `;
 
-    addressInput.parentElement.style.position = 'relative';
-    addressInput.parentElement.appendChild(resultsContainer);
+    // Append to body to avoid clipping by parent overflow
+    document.body.appendChild(resultsContainer);
+
+    // Function to update dropdown position
+    function updateDropdownPosition() {
+        const rect = addressInput.getBoundingClientRect();
+        resultsContainer.style.top = `${rect.bottom}px`;
+        resultsContainer.style.left = `${rect.left}px`;
+        resultsContainer.style.width = `${rect.width}px`;
+    }
 
     // Auto-capitalize input
     addressInput.addEventListener('input', function() {
@@ -470,14 +498,30 @@ function initAutocomplete() {
                         resultsContainer.appendChild(item);
                     });
 
+                    // Update position and show dropdown
+                    updateDropdownPosition();
                     resultsContainer.style.display = 'block';
                 })
                 .catch(err => {
                     console.error('Geocoding error:', err);
                     resultsContainer.innerHTML = '<div style="padding: 12px; color: #f44336;">Error searching addresses</div>';
+                    updateDropdownPosition();
                     resultsContainer.style.display = 'block';
                 });
         }, 500);
+    });
+
+    // Update dropdown position on scroll or resize
+    window.addEventListener('scroll', () => {
+        if (resultsContainer.style.display === 'block') {
+            updateDropdownPosition();
+        }
+    }, true); // Use capture to catch scroll events in child elements
+
+    window.addEventListener('resize', () => {
+        if (resultsContainer.style.display === 'block') {
+            updateDropdownPosition();
+        }
     });
 
     // Hide results when clicking outside
@@ -527,17 +571,30 @@ function onMedicationSelected() {
         return;
     }
 
+    // Clear previous preview
+    clearDeliveryPreview();
+
+    // Show confirm medication buttons
+    document.getElementById('confirmMedicationSection').classList.remove('hidden');
+}
+
+function confirmMedicationSelection() {
+    const medicationId = document.getElementById('medication').value;
+
+    if (!medicationId) {
+        alert('Please select a medication');
+        return;
+    }
+
     if (DEBUG) {
-        console.log('Calculating delivery for medication:', medicationId);
+        console.log('Confirming medication and calculating delivery:', medicationId);
         console.log('To location:', selectedLat, selectedLng);
     }
 
-    // Clear previous preview first
-    clearDeliveryPreview();
-
-    // Show loading state
-    document.getElementById('deliveryPreview').textContent = 'Calculating delivery path...';
-    document.getElementById('deliveryPreview').style.display = 'block';
+    // Hide confirm buttons and show pathfinding loader
+    document.getElementById('confirmMedicationSection').classList.add('hidden');
+    document.getElementById('pathfindingLoader').classList.remove('hidden');
+    document.getElementById('deliveryPreview').style.display = 'none';
 
     // Calculate delivery path
     fetch(`/api/v1/drone/calculate-delivery?medicationId=${medicationId}&targetLat=${selectedLat}&targetLng=${selectedLng}`, {
@@ -550,13 +607,23 @@ function onMedicationSelected() {
                 deliveryData = data;
                 if (DEBUG) console.log('Delivery data saved:', deliveryData);
                 showDeliveryPreview(data);
+
+                // Hide pathfinding loader, show Place Order section
+                document.getElementById('pathfindingLoader').classList.add('hidden');
+                document.getElementById('placeOrderSection').classList.remove('hidden');
             } else {
+                // Hide loader on error, show confirm buttons again
+                document.getElementById('pathfindingLoader').classList.add('hidden');
+                document.getElementById('confirmMedicationSection').classList.remove('hidden');
                 alert('Error calculating path: ' + data.error);
                 document.getElementById('deliveryPreview').style.display = 'none';
             }
         })
         .catch(err => {
             console.error('Failed to calculate delivery:', err);
+            // Hide loader on error, show confirm buttons again
+            document.getElementById('pathfindingLoader').classList.add('hidden');
+            document.getElementById('confirmMedicationSection').classList.remove('hidden');
             alert('Failed to calculate delivery path');
             document.getElementById('deliveryPreview').style.display = 'none';
         });
@@ -586,7 +653,7 @@ function showDeliveryPreview(data) {
 
     servicePointMarker = L.marker([data.servicePoint.lat, data.servicePoint.lng], {
         icon: L.icon({
-            iconUrl: '/images/service_point_marker.png',
+            iconUrl: '/images/service_marker.png',
             iconSize: [26, 38],
             iconAnchor: [13, 38],
             popupAnchor: [0, -38]
@@ -632,6 +699,12 @@ function clearDeliveryPreview() {
     if (deliveryPreview) {
         deliveryPreview.style.display = 'none';
     }
+
+    // Hide all sections
+    document.getElementById('confirmMedicationSection').classList.add('hidden');
+    document.getElementById('pathfindingLoader').classList.add('hidden');
+    document.getElementById('placeOrderSection').classList.add('hidden');
+
     deliveryData = null;
     fullFlightPath = [];
     currentPathIndex = 0;
@@ -761,7 +834,7 @@ function finishLocationConfirmation() {
 
     deliveryMarker = L.marker([selectedLat, selectedLng], {
         icon: L.icon({
-            iconUrl: '/images/location_marker.png',
+            iconUrl: '/images/loc_marker.png',
             iconSize: [26, 38],
             iconAnchor: [13, 38],
             popupAnchor: [0, -38]
@@ -852,12 +925,21 @@ function backToStep1() {
 
 function placeOrder() {
     const medicationId = document.getElementById('medication').value;
-    const quantity = document.getElementById('quantity').value;
+    const quantity = parseInt(document.getElementById('quantity').value);
+    const quantityError = document.getElementById('quantityError');
 
     if (!medicationId) {
         alert('Please select a medication');
         return;
     }
+
+    // Validate quantity
+    if (isNaN(quantity) || quantity < 1 || quantity > 5) {
+        quantityError.style.display = 'block';
+        alert('Quantity must be between 1 and 5');
+        return;
+    }
+    quantityError.style.display = 'none';
 
     if (!deliveryData) {
         alert('Please wait for delivery calculation to complete');
@@ -882,9 +964,22 @@ function placeOrder() {
         console.log('ETA:', savedDeliveryData.etaMinutes);
     }
 
-    // Create order with address AND coordinates
-    fetch(`/api/v1/orders/create-with-address?address=${encodeURIComponent(selectedAddress)}&lat=${selectedLat}&lng=${selectedLng}&medicationId=${medicationId}&quantity=${quantity}`, {
-        method: 'POST'
+    // Create order with address, coordinates, pre-calculated path, AND assigned drone
+    // Send path in request body to avoid URL length limits
+    fetch('/api/v1/orders/create-with-address', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            address: selectedAddress,
+            lat: selectedLat,
+            lng: selectedLng,
+            medicationId: medicationId,
+            quantity: quantity,
+            calculatedPath: savedDeliveryData.path,  // Send path array directly in body
+            assignedDroneId: savedDeliveryData.assignedDrone  // Send assigned drone ID
+        })
     })
         .then(r => r.json())
         .then(data => {
@@ -902,12 +997,11 @@ function placeOrder() {
                     <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 15px 0;">
                         <div><strong>Live Tracking</strong></div>
                         <div style="margin-top: 10px;">
-                            <div>Drone: <strong>${savedDeliveryData.assignedDrone || 'Unknown'}</strong></div>
                             <div>From: <strong>${savedDeliveryData.servicePoint ? savedDeliveryData.servicePoint.name : 'Unknown'}</strong></div>
                         </div>
                     </div>
                     <div style="text-align: center; color: #2196F3; font-weight: 600;">
-                        Drone dispatched! Watch it fly on the map...
+                        Drone dispatched - track it live on the map!
                     </div>
                 `;
 
@@ -1004,11 +1098,24 @@ function connectWebSocket() {
 function updateDronePosition(position) {
     if (DEBUG) console.log('🔍 Update check - Received order:', position.orderNumber, 'Current order:', currentOrderNumber, 'State:', orderState);
 
-    // Ignore updates if:
-    // 1. Not our order
-    // 2. Order is already collected (customer shouldn't see return journey)
-    if (position.orderNumber !== currentOrderNumber || orderState === 'COLLECTED') {
-        if (DEBUG) console.log('⚠️ Ignoring update - not our order or already collected');
+    // Strict filtering: Only show drone if ALL conditions are met:
+    // 1. We have an active order (not null)
+    // 2. The position is for OUR order (exact match)
+    // 3. We're in IN_TRANSIT state (actively tracking)
+    // 4. Order hasn't been collected yet
+
+    if (!currentOrderNumber) {
+        if (DEBUG) console.log('⚠️ Ignoring update - no active order');
+        return;
+    }
+
+    if (position.orderNumber !== currentOrderNumber) {
+        if (DEBUG) console.log('⚠️ Ignoring update - not our order');
+        return;
+    }
+
+    if (orderState !== 'IN_TRANSIT' && orderState !== 'ARRIVED') {
+        if (DEBUG) console.log('⚠️ Ignoring update - not in tracking state');
         return;
     }
 

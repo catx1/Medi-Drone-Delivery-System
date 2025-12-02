@@ -35,7 +35,12 @@ public class OrderService {
         log.info("Creating order: address={}, medicationId={}, quantity={}",
                 address, medicationId, quantity);
 
-        // 1. Validate medication exists and has stock
+        // 1. Validate quantity
+        if (quantity < 1 || quantity > 5) {
+            throw new RuntimeException("Quantity must be between 1 and 5");
+        }
+
+        // 2. Validate medication exists and has stock
         Medication medication = medicationRepository.findById(medicationId)
                 .orElseThrow(() -> new RuntimeException("Medication not found with id: " + medicationId));
 
@@ -45,7 +50,7 @@ public class OrderService {
                     ", Requested: " + quantity);
         }
 
-        // 2. Geocode the address
+        // 3. Geocode the address
         Map<String, Double> coordinates;
         try {
             coordinates = geocodingService.geocodeAddress(address);
@@ -53,10 +58,10 @@ public class OrderService {
             throw new RuntimeException("Failed to geocode address: " + e.getMessage());
         }
 
-        // 3. Generate order number
+        // 4. Generate order number
         String orderNumber = generateOrderNumber();
 
-        // 4. Create the order
+        // 5. Create the order
         DeliveryOrder order = new DeliveryOrder();
         order.setOrderNumber(orderNumber);
         order.setCustomerAddress(address);
@@ -67,11 +72,11 @@ public class OrderService {
         order.setStatus(OrderStatus.QUEUED);
         order.setCreatedAt(LocalDateTime.now());
 
-        // 5. Update medication stock
+        // 6. Update medication stock
         medication.setStockQuantity(medication.getStockQuantity() - quantity);
         medicationRepository.save(medication);
 
-        // 6. Save order
+        // 7. Save order
         DeliveryOrder savedOrder = orderRepository.save(order);
 
         log.info("Order created: {}", orderNumber);
@@ -116,8 +121,16 @@ public class OrderService {
         log.info("Pickup confirmed for order: {}", order.getOrderNumber());
         log.info("Drone now returning to service point");
 
-        // Trigger drone to return to base
-        triggerDroneReturnToBase(savedOrder);
+        // Trigger drone to return to base asynchronously (don't block UI)
+        final DeliveryOrder finalOrder = savedOrder;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                triggerDroneReturnToBase(finalOrder);
+            } catch (Exception e) {
+                log.error("Failed to trigger return journey for order {}: {}",
+                    finalOrder.getOrderNumber(), e.getMessage(), e);
+            }
+        });
 
         return savedOrder;
     }
