@@ -19,6 +19,7 @@ public class DroneFlightSimulator {
     private String droneId;
     private String status = "WAITING"; // WAITING, FLYING, HOVERING, ARRIVED, RETURNED
     private boolean isActive = false;
+
     /**
      * -- GETTER --
      *  Get current order number being delivered
@@ -28,7 +29,7 @@ public class DroneFlightSimulator {
     private boolean isReturnJourney = false;
 
     // Simulation parameters
-    private static final double SPEED_KM_PER_HOUR = 160.0;
+    private static final double SPEED_KM_PER_HOUR = 160.0; // Set to 160 km/h for faster simulation
     private static final double SPEED_DEGREES_PER_SECOND = SPEED_KM_PER_HOUR / 111.0 / 3600.0;
 
     /** Duration (in seconds) that drone hovers at delivery location for drop-off */
@@ -48,7 +49,6 @@ public class DroneFlightSimulator {
         }
 
         // Check if this is a return journey
-        // Has current order number AND status was arrived (waiting at customer)
         String previousOrderNumber = this.currentOrderNumber;
         boolean wasWaitingAtCustomer = (this.status != null && this.status.equals("ARRIVED"));
 
@@ -57,7 +57,7 @@ public class DroneFlightSimulator {
 
         // Keep order number for return journey, clear for new deliveries
         if (!this.isReturnJourney) {
-            this.currentOrderNumber = null; // Clear for new deliveries
+            this.currentOrderNumber = null;
         }
 
         this.droneId = droneId;

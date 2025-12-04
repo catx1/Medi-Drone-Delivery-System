@@ -105,7 +105,6 @@ public class DistanceControllerUnitTest {
     // -----------------------------------------------
 
     // Valid test cases
-    // TODO add in names
     @ParameterizedTest(name = "{5}")
     @CsvSource({
             "-3.192473, 55.946233, -3.192474, 55.946234, true, 'Very close'",

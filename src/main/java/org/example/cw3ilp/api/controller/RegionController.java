@@ -65,8 +65,6 @@ public class RegionController {
             return ResponseEntity.badRequest().build();
         }
 
-        // TODO Split this into 2 functions
-
         List<LngLat> vertices = request.getRegion().getVertices();
         LngLat first = vertices.getFirst();
         LngLat last = vertices.getLast();
