@@ -24,6 +24,9 @@ application.properties
 *.iml
 *.ipr
 
+### Environment files ###
+.env
+
 # Ignore JVM crash logs
 hs_err_pid*.log
 hs_err_pid*.jfr
