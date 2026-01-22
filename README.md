@@ -2,6 +2,33 @@
 
 A drone-based medication delivery system with live tracking and automated pathfinding.
 
+Created as part of Coursework 3 - Student Selected Implementation for Informatics Large Practical. 
+
+## Overview
+This project extends the ILP drone delivery service with **real-time tracking for medication deliveries** in Edinburgh.  
+Key features:
+- Users can request medication delivery to any Edinburgh address.
+- Live drone visualization on a map with real-time path updates.
+- Collection notifications when the drone arrives.
+- Designed for residents with limited access to pharmacies.
+
+## Innovation & Benefits
+- **Live Tracking:** Drone position updates every 250ms via WebSocket.
+- **Path Visualization:** Completed path in grey, remaining path in blue.
+- **Automated Medication Handling:** Checks medication temperature requirements in the H2 database.
+- **Event-Driven System:** Real-time status updates (QUEUED → IN-TRANSIT → ARRIVED → COLLECTED → COMPLETED).
+
+The system demonstrates a **proof-of-concept real-time drone delivery application** with a complete customer interface and automated order processing.
+
+### Future Enhancements
+1. Multi-drone support.
+2. Persistent database storage.
+3. User authentication.
+4. Realistic drone physics (battery, altitude, weather conditions).
+
+
+## Installation Instructions 
+
 ## Prerequisites
 
 - **Java 21** or higher
