@@ -1,17 +1,18 @@
 # MediDrone Delivery System
 
-A drone-based medication delivery system with live tracking and automated pathfinding.
+A drone medication delivery system with live tracking and automated pathfinding.
 
-Created as part of Coursework 3 - Student Selected Implementation for Informatics Large Practical. 
+Created for the student selected implementation section (Coursework 3 & 4) of Informatics Large Practical INFR09051 (https://www.drps.ed.ac.uk/19-20/dpt/cxinfr09051.htm). 
 
 ## Overview
-This project extends the ILP drone delivery service with real-time tracking for medication deliveries in Edinburgh.  
+This project extends the ILP drone delivery service with **real-time tracking for medication deliveries** in Edinburgh.  
+
 Key features:
 - Users can request medication delivery to any Edinburgh address.
 - Live drone visualization on a map with real-time path updates.
 - Collection notifications when the drone arrives.
 - Designed for residents with limited access to pharmacies.
-
+---
 ## Innovation & Benefits
 - **Live Tracking:** Drone position updates every 250ms via WebSocket.
 - **Path Visualization:** Completed path in grey, remaining path in blue.
@@ -20,21 +21,38 @@ Key features:
 
 The system demonstrates a proof-of-concept real-time drone delivery application with a complete customer interface and automated order processing.
 
+---
+## Order Flow
+
+---
+#### Home Screen
+![Home Screen](images/home_screen.png)
+
+#### Order in transit
+![Delivery](images/delivery.png)
+
+1. User enters postcode → Nominatim geocodes to coordinates
+2. Frontend requests path preview → Backend calculates A* path avoiding no-fly zones
+3. Order placed → Path stored as JSON, drone dispatched
+4. WebSocket broadcasts drone position every 250ms → Frontend animates marker
+5. Drone arrives → User confirms pickup → Drone returns to service point
+
+For a full demo, see [DEMO.md](DEMO.md).
+
 ### Future Enhancements
 1. Multi-drone support.
 2. Persistent database storage.
 3. User authentication.
 4. Realistic drone physics (battery, altitude, weather conditions).
 
-
 ## Installation Instructions 
 
 ## Prerequisites
 
-- **Java 21** or higher
+- **Java 21** 
 - **Maven 3.6+**
 
-No API keys required - the application uses Nominatim (OpenStreetMap) for geocoding, which is free.
+No API keys required - the application uses Nominatim (OpenStreetMap) for geocoding, which is free and works out of the box.
 
 ## Setup
 
@@ -42,7 +60,7 @@ No API keys required - the application uses Nominatim (OpenStreetMap) for geocod
 
 ```bash
 git clone <repository-url>
-cd Medi-Drone-Delivery-System
+cd cw3-ilp
 ```
 
 ### 2. Build the Project
@@ -50,11 +68,8 @@ cd Medi-Drone-Delivery-System
 ```bash
 mvn clean install
 ```
-If tests are failing, run instead:
 
-```bash
-mvn clean install -DskipTests
-```
+If this fails, ensure Java version is set to 21.
 
 ## Running the Application
 
@@ -76,8 +91,6 @@ java -jar target/cw1-ILP-0.0.1-SNAPSHOT.jar
 Once running, open your browser and navigate to:
 
 - **Customer Portal**: http://localhost:8080/customer-portal.html
-
-Or http://localhost:****/customer-portal.html if you have used a different port.
 
 ## Optional: Enable H2 Console (Development Only)
 
@@ -128,9 +141,4 @@ If port 8080 is already in use, specify a different port:
 mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=8081
 ```
 
-### Database Issues
 
-The H2 database is recreated on each startup. If you need persistence, modify `application.properties`:
-```properties
-spring.jpa.hibernate.ddl-auto=update
-```
