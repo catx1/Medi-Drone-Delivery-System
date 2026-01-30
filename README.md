@@ -12,7 +12,7 @@ Key features:
 - Live drone visualization on a map with real-time path updates.
 - Collection notifications when the drone arrives.
 - Designed for residents with limited access to pharmacies.
----
+
 ## Innovation & Benefits
 - **Live Tracking:** Drone position updates every 250ms via WebSocket.
 - **Path Visualization:** Completed path in grey, remaining path in blue.
@@ -21,10 +21,10 @@ Key features:
 
 The system demonstrates a proof-of-concept real-time drone delivery application with a complete customer interface and automated order processing.
 
----
+
 ## Order Flow
 
----
+
 #### Home Screen
 ![Home Screen](images/home_screen.png)
 
