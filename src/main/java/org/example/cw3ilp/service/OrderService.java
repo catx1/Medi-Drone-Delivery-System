@@ -21,7 +21,7 @@ public class OrderService {
 
     private final DeliveryOrderRepository orderRepository;
     private final MedicationRepository medicationRepository;
-    private final GeocodingService geocodingService;
+    //private final GeocodingService geocodingService;
     private final DroneFlightSimulator droneFlightSimulator;
     private final PathfinderService pathfinderService;
     private final ILPDataService ilpDataService;
@@ -50,14 +50,10 @@ public class OrderService {
                     ", Requested: " + quantity);
         }
 
-        // 3. Geocode the address
-        Map<String, Double> coordinates;
-        try {
-            coordinates = geocodingService.geocodeAddress(address);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to geocode address: " + e.getMessage());
-        }
+        // 3. This endpoint requires Google Maps API - use /create-with-address instead
+        throw new RuntimeException("This endpoint is disabled. Use /api/v1/orders/create-with-address instead");
 
+        /*
         // 4. Generate order number
         String orderNumber = generateOrderNumber();
 
@@ -82,6 +78,7 @@ public class OrderService {
         log.info("Order created: {}", orderNumber);
 
         return savedOrder;
+        */
     }
 
     /**

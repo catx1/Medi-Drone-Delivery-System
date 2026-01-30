@@ -10,7 +10,7 @@ import org.example.cw3ilp.repository.MedicationRepository;
 import org.example.cw3ilp.service.DistanceService;
 import org.example.cw3ilp.service.DroneFlightSimulator;
 import org.example.cw3ilp.service.DroneService;
-import org.example.cw3ilp.service.GeocodingService;
+//import org.example.cw3ilp.service.GeocodingService;
 import org.example.cw3ilp.service.ILPDataService;
 import org.example.cw3ilp.service.PathfinderService;
 import org.slf4j.Logger;
@@ -36,7 +36,7 @@ public class DroneController {
     private final PathfinderService pathfinderService;
     private final ILPDataService ilpDataService;
     private final DistanceService distanceService;
-    private final GeocodingService geocodingService;
+    //private final GeocodingService geocodingService;
     private final MedicationRepository medicationRepository;
 
     public DroneController(DroneService droneService,
@@ -44,14 +44,14 @@ public class DroneController {
                            PathfinderService pathfinderService,
                            ILPDataService ilpDataService,
                            DistanceService distanceService,
-                           GeocodingService geocodingService,
+                           //GeocodingService geocodingService,
                            MedicationRepository medicationRepository) {
         this.droneService = droneService;
         this.droneFlightSimulator = droneFlightSimulator;
         this.pathfinderService = pathfinderService;
         this.ilpDataService = ilpDataService;
         this.distanceService = distanceService;
-        this.geocodingService = geocodingService;
+        //this.geocodingService = geocodingService;
         this.medicationRepository = medicationRepository;
     }
 
@@ -372,28 +372,28 @@ public class DroneController {
         }
     }
 
-    @GetMapping("/test-geocoding")
-    public ResponseEntity<Map<String, Object>> testGeocoding(
-            @RequestParam(defaultValue = "Appleton Tower") String address) {
-
-        try {
-            Map<String, Double> coords = geocodingService.geocodeAddress(address);
-
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "address", address,
-                    "coordinates", coords,
-                    "message", "Geocoding successful!"
-            ));
-
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of(
-                            "success", false,
-                            "error", e.getMessage()
-                    ));
-        }
-    }
+//    @GetMapping("/test-geocoding")
+//    public ResponseEntity<Map<String, Object>> testGeocoding(
+//            @RequestParam(defaultValue = "Appleton Tower") String address) {
+//
+//        try {
+//            Map<String, Double> coords = geocodingService.geocodeAddress(address);
+//
+//            return ResponseEntity.ok(Map.of(
+//                    "success", true,
+//                    "address", address,
+//                    "coordinates", coords,
+//                    "message", "Geocoding successful!"
+//            ));
+//
+//        } catch (Exception e) {
+//            return ResponseEntity.badRequest()
+//                    .body(Map.of(
+//                            "success", false,
+//                            "error", e.getMessage()
+//                    ));
+//        }
+//    }
 
     /**
      * Calculate delivery path with medication requirements - for customer portal
