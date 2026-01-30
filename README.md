@@ -39,6 +39,8 @@ The system demonstrates a proof-of-concept real-time drone delivery application 
 
 For a full demo, see [DEMO.md](DEMO.md).
 
+For a full written explanation, see [Full Explanation PDF](full_explanation.pdf).
+
 ### Future Enhancements
 1. Multi-drone support.
 2. Persistent database storage.
