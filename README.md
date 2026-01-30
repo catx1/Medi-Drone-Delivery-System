@@ -34,7 +34,7 @@ The system demonstrates a proof-of-concept real-time drone delivery application 
 - **Java 21** or higher
 - **Maven 3.6+**
 
-No API keys required - the application uses Nominatim (OpenStreetMap) for geocoding, which is free and works out of the box.
+No API keys required - the application uses Nominatim (OpenStreetMap) for geocoding, which is free.
 
 ## Setup
 
@@ -42,7 +42,7 @@ No API keys required - the application uses Nominatim (OpenStreetMap) for geocod
 
 ```bash
 git clone <repository-url>
-cd cw3-ilp
+cd Medi-Drone-Delivery-System
 ```
 
 ### 2. Build the Project
