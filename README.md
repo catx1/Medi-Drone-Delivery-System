@@ -33,7 +33,8 @@ The system demonstrates a **proof-of-concept real-time drone delivery applicatio
 
 - **Java 21** or higher
 - **Maven 3.6+**
-- **Google Maps API Key** (for geocoding)
+
+No API keys required - the application uses Nominatim (OpenStreetMap) for geocoding, which is free and works out of the box.
 
 ## Setup
 
@@ -44,32 +45,7 @@ git clone <repository-url>
 cd cw3-ilp
 ```
 
-### 2. Configure Google Maps API Key
-
-Set up a Google Maps API key, ensuring geocoding is enabled. 
-Set your Google Maps API key as an environment variable:
-
-**Windows (Command Prompt):**
-```cmd
-set GOOGLE_MAPS_API_KEY=your_api_key_here
-```
-
-**Windows (PowerShell):**
-```powershell
-$env:GOOGLE_MAPS_API_KEY="your_api_key_here"
-```
-
-**macOS/Linux:**
-```bash
-export GOOGLE_MAPS_API_KEY=your_api_key_here
-```
-
-Alternatively, create a `.env` file in the project root:
-```
-GOOGLE_MAPS_API_KEY=your_api_key_here
-```
-
-### 3. Build the Project
+### 2. Build the Project
 
 ```bash
 mvn clean install
@@ -132,7 +108,7 @@ Then access the console at: http://localhost:8080/h2-console
 - **Backend**: Spring Boot 3.5.6, Java 21
 - **Database**: H2 (in-memory)
 - **Frontend**: Vanilla JavaScript, Leaflet.js
-- **APIs**: Google Maps Geocoding API
+- **Geocoding**: Nominatim (OpenStreetMap) - free, no API key required
 - **Build Tool**: Maven
 
 ## Troubleshooting
@@ -144,12 +120,6 @@ If port 8080 is already in use, specify a different port:
 ```bash
 mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=8081
 ```
-
-### Google Maps API Errors
-
-Ensure your API key has the following APIs enabled:
-- Geocoding API
-- Maps JavaScript API
 
 ### Database Issues
 
