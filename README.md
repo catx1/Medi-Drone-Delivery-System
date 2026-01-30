@@ -5,7 +5,7 @@ A drone-based medication delivery system with live tracking and automated pathfi
 Created as part of Coursework 3 - Student Selected Implementation for Informatics Large Practical. 
 
 ## Overview
-This project extends the ILP drone delivery service with **real-time tracking for medication deliveries** in Edinburgh.  
+This project extends the ILP drone delivery service with real-time tracking for medication deliveries in Edinburgh.  
 Key features:
 - Users can request medication delivery to any Edinburgh address.
 - Live drone visualization on a map with real-time path updates.
@@ -18,7 +18,7 @@ Key features:
 - **Automated Medication Handling:** Checks medication temperature requirements in the H2 database.
 - **Event-Driven System:** Real-time status updates (QUEUED → IN-TRANSIT → ARRIVED → COLLECTED → COMPLETED).
 
-The system demonstrates a **proof-of-concept real-time drone delivery application** with a complete customer interface and automated order processing.
+The system demonstrates a proof-of-concept real-time drone delivery application with a complete customer interface and automated order processing.
 
 ### Future Enhancements
 1. Multi-drone support.
@@ -50,6 +50,11 @@ cd cw3-ilp
 ```bash
 mvn clean install
 ```
+If tests are failing, run instead:
+
+```bash
+mvn clean install -DskipTests
+```
 
 ## Running the Application
 
@@ -71,6 +76,8 @@ java -jar target/cw1-ILP-0.0.1-SNAPSHOT.jar
 Once running, open your browser and navigate to:
 
 - **Customer Portal**: http://localhost:8080/customer-portal.html
+
+Or http://localhost:****/customer-portal.html if you have used a different port.
 
 ## Optional: Enable H2 Console (Development Only)
 
