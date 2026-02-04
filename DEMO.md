@@ -34,6 +34,14 @@ Drone arrives, user confirms pickup, drone returns to service point.
 
 ---
 
+## Video Demo
+
+To watch, copy and past the link into your browser.
+
+Short demo video: https://drive.google.com/file/d/1KJRT5VYBnB8M96CHsaEUslB64rbR-8t9/view?usp=drive_link
+
+Long demo video: https://drive.google.com/file/d/137au4n9-pL1asmucqdMPWmdw7AyM3JrI/view?usp=drive_link
+
 ## Edge Cases Handled
 
 ### Outside Service Area
